@@ -1,0 +1,273 @@
+[
+  {
+    "id": "test-001",
+    "description": "Authorization Request — 所有 Required 欄位齊全",
+    "input": {
+      "institution_id": 1,
+      "req_method": "GET",
+      "req_url": "https://auth.example.com/protocol/openid-connect/auth?response_type=code&client_id=myapp&redirect_uri=https%3A%2F%2Fclient.example.com%2Fcb&scope=openid&state=abc123&aud=https%3A%2F%2Fresource.example.com&code_challenge=E9Melhoa2OwvFrEMTJguCHaoeK&code_challenge_method=S256",
+      "req_headers": {},
+      "req_body": null,
+      "res_body": null
+    },
+    "expected": {
+      "flowStep": "authorization_request",
+      "results": [
+        { "field": "response_type",         "status": "PASS" },
+        { "field": "client_id",             "status": "PASS" },
+        { "field": "redirect_uri",          "status": "PASS" },
+        { "field": "scope",                 "status": "PASS" },
+        { "field": "state",                 "status": "PASS" },
+        { "field": "aud",                   "status": "PASS" },
+        { "field": "code_challenge",        "status": "PASS" },
+        { "field": "code_challenge_method", "status": "PASS" },
+        { "field": "launch",                "status": "SKIP" }
+      ]
+    }
+  },
+  {
+    "id": "test-002",
+    "description": "Authorization Request — 缺少 PKCE 欄位",
+    "input": {
+      "institution_id": 1,
+      "req_method": "GET",
+      "req_url": "https://auth.example.com/protocol/openid-connect/auth?response_type=code&client_id=myapp&redirect_uri=https%3A%2F%2Fclient.example.com%2Fcb&scope=openid&state=abc123&aud=https%3A%2F%2Fresource.example.com",
+      "req_headers": {},
+      "req_body": null,
+      "res_body": null
+    },
+    "expected": {
+      "flowStep": "authorization_request",
+      "results": [
+        { "field": "code_challenge",        "status": "FAIL" },
+        { "field": "code_challenge_method", "status": "FAIL" }
+      ]
+    }
+  },
+  {
+    "id": "test-003",
+    "description": "Token Request Auth Code — 所有 Required 欄位齊全",
+    "input": {
+      "institution_id": 2,
+      "req_method": "POST",
+      "req_url": "https://auth.example.com/protocol/openid-connect/token",
+      "req_headers": { "Content-Type": "application/x-www-form-urlencoded" },
+      "req_body": "grant_type=authorization_code&code=SplxlOBeZQQYbYS6WxSbIA&redirect_uri=https%3A%2F%2Fclient.example.com%2Fcb&code_verifier=dBjftJeZ4CVP-mB92K27uhbUJU1p1r",
+      "res_body": null
+    },
+    "expected": {
+      "flowStep": "token_request_auth_code",
+      "results": [
+        { "field": "grant_type",    "status": "PASS" },
+        { "field": "code",          "status": "PASS" },
+        { "field": "redirect_uri",  "status": "PASS" },
+        { "field": "code_verifier", "status": "PASS" },
+        { "field": "client_id",     "status": "SKIP" }
+      ]
+    }
+  },
+  {
+    "id": "test-004",
+    "description": "Token Request Auth Code — 缺少 code_verifier",
+    "input": {
+      "institution_id": 2,
+      "req_method": "POST",
+      "req_url": "https://auth.example.com/protocol/openid-connect/token",
+      "req_headers": { "Content-Type": "application/x-www-form-urlencoded" },
+      "req_body": "grant_type=authorization_code&code=SplxlOBeZQQYbYS6WxSbIA&redirect_uri=https%3A%2F%2Fclient.example.com%2Fcb",
+      "res_body": null
+    },
+    "expected": {
+      "flowStep": "token_request_auth_code",
+      "results": [
+        { "field": "code_verifier", "status": "FAIL" }
+      ]
+    }
+  },
+  {
+    "id": "test-005",
+    "description": "Token Request Client Credentials — 所有 Required 欄位齊全",
+    "input": {
+      "institution_id": 2,
+      "req_method": "POST",
+      "req_url": "https://auth.example.com/protocol/openid-connect/token",
+      "req_headers": { "Content-Type": "application/x-www-form-urlencoded" },
+      "req_body": "grant_type=client_credentials&scope=system%2FObservation.rs&client_assertion_type=urn%3Aietf%3Aparams%3Aoauth%3Aclient-assertion-type%3Ajwt-bearer&client_assertion=eyJhbGci.payload.sig",
+      "res_body": null
+    },
+    "expected": {
+      "flowStep": "token_request_client_cred",
+      "results": [
+        { "field": "grant_type",            "status": "PASS" },
+        { "field": "scope",                 "status": "PASS" },
+        { "field": "client_assertion_type", "status": "PASS" },
+        { "field": "client_assertion",      "status": "PASS" }
+      ]
+    }
+  },
+  {
+    "id": "test-006",
+    "description": "Token Request Client Credentials — 缺少 client_assertion",
+    "input": {
+      "institution_id": 2,
+      "req_method": "POST",
+      "req_url": "https://auth.example.com/protocol/openid-connect/token",
+      "req_headers": { "Content-Type": "application/x-www-form-urlencoded" },
+      "req_body": "grant_type=client_credentials&scope=system%2FObservation.rs&client_assertion_type=urn%3Aietf%3Aparams%3Aoauth%3Aclient-assertion-type%3Ajwt-bearer",
+      "res_body": null
+    },
+    "expected": {
+      "flowStep": "token_request_client_cred",
+      "results": [
+        { "field": "client_assertion", "status": "FAIL" }
+      ]
+    }
+  },
+  {
+    "id": "test-007",
+    "description": "Token Request Refresh — 所有 Required 欄位齊全",
+    "input": {
+      "institution_id": 2,
+      "req_method": "POST",
+      "req_url": "https://auth.example.com/protocol/openid-connect/token",
+      "req_headers": { "Content-Type": "application/x-www-form-urlencoded" },
+      "req_body": "grant_type=refresh_token&refresh_token=tGzv3JOkF0XG5Qx2TlKWIA",
+      "res_body": null
+    },
+    "expected": {
+      "flowStep": "token_request_refresh",
+      "results": [
+        { "field": "grant_type",    "status": "PASS" },
+        { "field": "refresh_token", "status": "PASS" },
+        { "field": "scope",         "status": "SKIP" }
+      ]
+    }
+  },
+  {
+    "id": "test-008",
+    "description": "Token Request Refresh — 缺少 refresh_token",
+    "input": {
+      "institution_id": 2,
+      "req_method": "POST",
+      "req_url": "https://auth.example.com/protocol/openid-connect/token",
+      "req_headers": { "Content-Type": "application/x-www-form-urlencoded" },
+      "req_body": "grant_type=refresh_token",
+      "res_body": null
+    },
+    "expected": {
+      "flowStep": "token_request_refresh",
+      "results": [
+        { "field": "refresh_token", "status": "FAIL" }
+      ]
+    }
+  },
+  {
+    "id": "test-009",
+    "description": "SMART Metadata — 所有 Required 欄位齊全",
+    "input": {
+      "institution_id": 3,
+      "req_method": "GET",
+      "req_url": "https://auth.example.com/.well-known/smart-configuration",
+      "req_headers": {},
+      "req_body": null,
+      "res_body": "{\"grant_types_supported\":[\"authorization_code\"],\"token_endpoint\":\"https://auth.example.com/token\",\"capabilities\":[\"launch-standalone\"],\"code_challenge_methods_supported\":[\"S256\"]}"
+    },
+    "expected": {
+      "flowStep": "smart_metadata",
+      "results": [
+        { "field": "grant_types_supported",            "status": "PASS" },
+        { "field": "token_endpoint",                   "status": "PASS" },
+        { "field": "capabilities",                     "status": "PASS" },
+        { "field": "code_challenge_methods_supported", "status": "PASS" }
+      ]
+    }
+  },
+  {
+    "id": "test-010",
+    "description": "SMART Metadata — 缺少 capabilities",
+    "input": {
+      "institution_id": 3,
+      "req_method": "GET",
+      "req_url": "https://auth.example.com/.well-known/smart-configuration",
+      "req_headers": {},
+      "req_body": null,
+      "res_body": "{\"grant_types_supported\":[\"authorization_code\"],\"token_endpoint\":\"https://auth.example.com/token\",\"code_challenge_methods_supported\":[\"S256\"]}"
+    },
+    "expected": {
+      "flowStep": "smart_metadata",
+      "results": [
+        { "field": "capabilities", "status": "FAIL" }
+      ]
+    }
+  },
+  {
+    "id": "test-011",
+    "description": "FHIR Request — Authorization Bearer header 存在",
+    "input": {
+      "institution_id": 4,
+      "req_method": "GET",
+      "req_url": "https://fhir.example.com/fhir/Patient/123",
+      "req_headers": { "Authorization": "Bearer eyJhbGciOiJSUzI1NiJ9.eyJzdWIiOiJ1c2VyMSJ9.sig" },
+      "req_body": null,
+      "res_body": null
+    },
+    "expected": {
+      "flowStep": "fhir_request",
+      "results": [
+        { "field": "Authorization", "status": "PASS" }
+      ]
+    }
+  },
+  {
+    "id": "test-012",
+    "description": "FHIR Request — 缺少 Authorization header",
+    "input": {
+      "institution_id": 4,
+      "req_method": "GET",
+      "req_url": "https://fhir.example.com/fhir/Patient/123",
+      "req_headers": {},
+      "req_body": null,
+      "res_body": null
+    },
+    "expected": {
+      "flowStep": "fhir_request",
+      "results": [
+        { "field": "Authorization", "status": "FAIL" }
+      ]
+    }
+  },
+  {
+    "id": "test-013",
+    "description": "FHIR Request — Authorization 存在但非 Bearer 格式",
+    "input": {
+      "institution_id": 4,
+      "req_method": "GET",
+      "req_url": "https://fhir.example.com/fhir/Patient/123",
+      "req_headers": { "Authorization": "Basic dXNlcjpwYXNz" },
+      "req_body": null,
+      "res_body": null
+    },
+    "expected": {
+      "flowStep": "fhir_request",
+      "results": [
+        { "field": "Authorization", "status": "FAIL", "detail": "header present but does not match pattern ^Bearer .+" }
+      ]
+    }
+  },
+  {
+    "id": "test-014",
+    "description": "Unknown flow — 無法識別的 URL",
+    "input": {
+      "institution_id": 1,
+      "req_method": "GET",
+      "req_url": "https://example.com/health",
+      "req_headers": {},
+      "req_body": null,
+      "res_body": null
+    },
+    "expected": {
+      "flowStep": "unknown",
+      "results": []
+    }
+  }
+]

@@ -1,0 +1,479 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Rules — IUA/SMART Validator</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-gray-100 min-h-screen">
+  <nav class="bg-gray-800 text-white px-6 py-3 flex items-center gap-6">
+    <span class="font-bold">IUA/SMART Validator</span>
+    <a href="/dashboard.html" class="hover:text-gray-300">Dashboard</a>
+    <a href="/results.html" class="hover:text-gray-300">Results</a>
+    <a href="/validate.html" class="hover:text-gray-300">Validate</a>
+    <a href="/rules.html" class="text-blue-300 font-medium">Rules</a>
+    <a href="/settings.html" class="ml-auto hover:text-gray-300">Settings</a>
+    <a href="/test.html" class="hover:text-gray-300">Test</a>
+    <button onclick="logout()" class="text-sm hover:text-gray-300">Logout</button>
+  </nav>
+
+  <div class="max-w-7xl mx-auto p-6">
+    <div class="flex items-center justify-between mb-4">
+      <div class="flex items-center gap-2">
+        <h2 class="text-2xl font-bold">欄位檢查規則</h2>
+        <div class="relative group">
+          <button type="button" aria-label="欄位類型說明"
+            class="w-5 h-5 rounded-full bg-gray-700 text-white text-xs font-bold leading-5 text-center">!</button>
+          <div class="hidden group-hover:block absolute left-0 top-7 z-20 w-[42rem] rounded bg-white border border-gray-200 shadow-lg p-4 text-sm">
+            <div class="mb-3">
+              <div class="font-semibold text-red-700">required</div>
+              <p class="text-gray-600 mt-1">欄位不存在直接 FAIL，會讓該筆驗證失敗。</p>
+            </div>
+            <div class="mb-3">
+              <div class="font-semibold text-amber-700">conditional</div>
+              <p class="text-gray-600 mt-1">目前當 optional：有就 PASS，沒有 SKIP，不會 FAIL。</p>
+            </div>
+            <div>
+              <div class="font-semibold text-gray-700">optional</div>
+              <p class="text-gray-600 mt-1">欄位不存在記錄 SKIP；有就 PASS，不影響通過與否。</p>
+            </div>
+          </div>
+        </div>
+      </div>
+      <button onclick="openNewFieldForm()"
+        class="bg-blue-600 text-white px-4 py-2 rounded text-sm font-medium hover:bg-blue-700 transition">
+        新增欄位
+      </button>
+    </div>
+
+    <div id="message" class="hidden text-sm mb-4"></div>
+
+    <div class="bg-white rounded-lg shadow p-4 mb-4">
+      <div class="grid md:grid-cols-4 gap-3">
+        <div>
+          <label class="block text-xs text-gray-500 mb-1">Flow Step</label>
+          <select id="filter-flow" onchange="renderRules()" class="w-full border rounded px-2 py-1.5 text-sm"></select>
+        </div>
+        <div>
+          <label class="block text-xs text-gray-500 mb-1">Location</label>
+          <select id="filter-location" onchange="renderRules()" class="w-full border rounded px-2 py-1.5 text-sm">
+            <option value="">全部</option>
+            <option value="query_params">query_params</option>
+            <option value="body_params">body_params</option>
+            <option value="headers">headers</option>
+            <option value="response_body">response_body</option>
+          </select>
+        </div>
+        <div>
+          <label class="block text-xs text-gray-500 mb-1">Type</label>
+          <select id="filter-type" onchange="renderRules()" class="w-full border rounded px-2 py-1.5 text-sm">
+            <option value="">全部</option>
+            <option value="required">required</option>
+            <option value="conditional">conditional</option>
+            <option value="optional">optional</option>
+          </select>
+        </div>
+      </div>
+    </div>
+
+    <div id="rules-container" class="space-y-4"></div>
+  </div>
+
+  <div id="form-panel" class="hidden fixed inset-0 z-30 bg-black bg-opacity-40 p-4">
+    <div class="bg-white rounded-lg shadow-xl w-full max-w-5xl mx-auto mt-24 p-5">
+      <div class="flex items-center justify-between mb-4">
+        <div class="flex items-center gap-2">
+          <h3 id="form-title" class="font-semibold">新增欄位</h3>
+          <div class="relative group">
+            <button type="button" aria-label="欄位表單說明"
+              class="w-5 h-5 rounded-full bg-gray-700 text-white text-xs font-bold leading-5 text-center">!</button>
+            <div class="hidden group-hover:block absolute left-0 top-7 z-40 w-[58rem] rounded bg-white border border-gray-200 shadow-lg p-4 text-sm">
+              <div class="space-y-3 text-gray-600">
+                <p><span class="font-semibold text-gray-800">Flow</span>：這個欄位屬於哪個驗證流程。範例：<span class="font-mono">authorization_request</span></p>
+                <p><span class="font-semibold text-gray-800">Field Name</span>：要檢查的欄位名稱。範例：<span class="font-mono">client_id</span></p>
+                <p><span class="font-semibold text-gray-800">Location</span>：欄位所在位置。範例：<span class="font-mono">query_params</span>、<span class="font-mono">body_params</span>、<span class="font-mono">headers</span>、<span class="font-mono">response_body</span></p>
+                <p><span class="font-semibold text-gray-800">Type</span>：檢查類型。範例：<span class="font-mono">required</span> 缺少會 FAIL；<span class="font-mono">conditional</span> / <span class="font-mono">optional</span> 缺少會 SKIP。</p>
+                <p><span class="font-semibold text-gray-800">Pattern</span>：可選的正規表示式，用來檢查值格式。範例：<span class="font-mono">^Bearer .+</span></p>
+                <p><span class="font-semibold text-gray-800">Sort</span>：同一 flow 裡的顯示排序，數字越小越前面。範例：<span class="font-mono">0</span>、<span class="font-mono">10</span></p>
+              </div>
+            </div>
+          </div>
+        </div>
+        <button type="button" onclick="closeFieldForm()" class="text-gray-500 hover:text-gray-800 text-xl leading-none">&times;</button>
+      </div>
+      <input type="hidden" id="field-id">
+      <div class="grid md:grid-cols-6 gap-3">
+        <div>
+          <label class="block text-xs text-gray-500 mb-1">Flow</label>
+          <select id="field-flow" class="w-full border rounded px-2 py-1.5 text-sm"></select>
+        </div>
+        <div>
+          <label class="block text-xs text-gray-500 mb-1">Field Name</label>
+          <input id="field-name" class="w-full border rounded px-2 py-1.5 text-sm font-mono">
+        </div>
+        <div>
+          <label class="block text-xs text-gray-500 mb-1">Location</label>
+          <select id="field-location" class="w-full border rounded px-2 py-1.5 text-sm">
+            <option value="query_params">query_params</option>
+            <option value="body_params">body_params</option>
+            <option value="headers">headers</option>
+            <option value="response_body">response_body</option>
+          </select>
+        </div>
+        <div>
+          <label class="block text-xs text-gray-500 mb-1">Type</label>
+          <select id="field-type" class="w-full border rounded px-2 py-1.5 text-sm">
+            <option value="required">required</option>
+            <option value="conditional">conditional</option>
+            <option value="optional">optional</option>
+          </select>
+        </div>
+        <div>
+          <label class="block text-xs text-gray-500 mb-1">Pattern</label>
+          <input id="field-pattern" placeholder="可空" class="w-full border rounded px-2 py-1.5 text-sm font-mono">
+        </div>
+        <div>
+          <label class="block text-xs text-gray-500 mb-1">Sort</label>
+          <input id="field-sort" type="number" value="0" class="w-full border rounded px-2 py-1.5 text-sm">
+        </div>
+      </div>
+      <div class="flex gap-2 mt-4">
+        <button onclick="saveField()" class="bg-blue-600 text-white px-4 py-2 rounded text-sm hover:bg-blue-700">儲存</button>
+        <button onclick="closeFieldForm()" class="border border-gray-300 px-4 py-2 rounded text-sm hover:bg-gray-50">取消</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="flow-panel" class="hidden fixed inset-0 z-30 bg-black bg-opacity-40 p-4">
+    <div class="bg-white rounded-lg shadow-xl w-full max-w-3xl mx-auto mt-24 p-5">
+      <div class="flex items-center justify-between mb-4">
+        <h3 class="font-semibold">編輯 Endpoint</h3>
+        <button type="button" onclick="closeFlowForm()" class="text-gray-500 hover:text-gray-800 text-xl leading-none">&times;</button>
+      </div>
+      <input type="hidden" id="flow-step">
+      <div class="grid md:grid-cols-2 gap-3">
+        <div class="md:col-span-2">
+          <label class="block text-xs text-gray-500 mb-1">Description</label>
+          <input id="flow-description" class="w-full border rounded px-2 py-1.5 text-sm">
+        </div>
+        <div>
+          <label class="block text-xs text-gray-500 mb-1">Method</label>
+          <select id="flow-method" class="w-full border rounded px-2 py-1.5 text-sm">
+            <option value="GET">GET</option>
+            <option value="POST">POST</option>
+            <option value="*">*</option>
+          </select>
+        </div>
+        <div>
+          <label class="block text-xs text-gray-500 mb-1">Body grant_type</label>
+          <input id="flow-grant-type" placeholder="可空，例如 authorization_code" class="w-full border rounded px-2 py-1.5 text-sm font-mono">
+        </div>
+        <div class="md:col-span-2">
+          <label class="block text-xs text-gray-500 mb-1">Endpoint Path Contains</label>
+          <input id="flow-url-contains" placeholder="例如 /authorize、/token、/.well-known/smart-configuration"
+            class="w-full border rounded px-2 py-1.5 text-sm font-mono">
+          <p class="text-xs text-gray-500 mt-1">Validator 會用 request URL 是否包含這段 path 來辨識 flow。</p>
+        </div>
+      </div>
+      <div class="flex gap-2 mt-4">
+        <button onclick="saveFlow()" class="bg-blue-600 text-white px-4 py-2 rounded text-sm hover:bg-blue-700">儲存</button>
+        <button onclick="closeFlowForm()" class="border border-gray-300 px-4 py-2 rounded text-sm hover:bg-gray-50">取消</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const token = localStorage.getItem('token');
+    if (!token) location.href = '/login.html';
+
+    let flows = [];
+    let fields = [];
+    const FLOW_ORDER = [
+      'smart_metadata',
+      'authorization_request',
+      'token_request_auth_code',
+      'token_request_client_cred',
+      'fhir_request',
+      'token_request_refresh',
+    ];
+
+    async function apiFetch(url, opts = {}) {
+      const res = await fetch('/api' + url, {
+        ...opts,
+        headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json', ...opts.headers },
+      });
+      if (res.status === 401) { localStorage.removeItem('token'); location.href = '/login.html'; return null; }
+      return { ok: res.ok, data: await res.json() };
+    }
+
+    async function logout() {
+      await apiFetch('/auth/logout', { method: 'POST' });
+      localStorage.removeItem('token');
+      location.href = '/login.html';
+    }
+
+    function setMessage(text, ok) {
+      const el = document.getElementById('message');
+      el.textContent = text;
+      el.className = `text-sm mb-4 ${ok ? 'text-green-700' : 'text-red-600'}`;
+    }
+
+    function badge(type) {
+      const colors = {
+        required: 'bg-red-100 text-red-700',
+        conditional: 'bg-amber-100 text-amber-700',
+        optional: 'bg-gray-100 text-gray-700',
+      };
+      return `<span class="px-2 py-0.5 rounded text-xs font-medium ${colors[type] || ''}">${type}</span>`;
+    }
+
+    function populateSelects() {
+      sortRulesData();
+      const flowOptions = ['<option value="">全部</option>']
+        .concat(flows.map(f => `<option value="${f.flowStep}">${f.flowStep}</option>`))
+        .join('');
+      document.getElementById('filter-flow').innerHTML = flowOptions;
+      document.getElementById('field-flow').innerHTML = flows
+        .map(f => `<option value="${f.flowStep}">${f.flowStep}</option>`)
+        .join('');
+    }
+
+    function filteredFields() {
+      const flow = document.getElementById('filter-flow').value;
+      const location = document.getElementById('filter-location').value;
+      const type = document.getElementById('filter-type').value;
+      return fields.filter(f =>
+        (!flow || f.flowStep === flow)
+        && (!location || f.fieldLocation === location)
+        && (!type || f.fieldType === type)
+      );
+    }
+
+    function renderRules() {
+      const container = document.getElementById('rules-container');
+      const rows = filteredFields();
+      if (rows.length === 0) {
+        container.innerHTML = '<div class="bg-white rounded-lg shadow p-8 text-center text-gray-400">沒有欄位規則</div>';
+        return;
+      }
+
+      const byFlow = new Map();
+      for (const f of rows) {
+        if (!byFlow.has(f.flowStep)) byFlow.set(f.flowStep, []);
+        byFlow.get(f.flowStep).push(f);
+      }
+
+      const orderedEntries = Array.from(byFlow.entries()).sort(([a], [b]) => flowIndex(a) - flowIndex(b) || a.localeCompare(b));
+      container.innerHTML = orderedEntries.map(([flowStep, flowFields]) => {
+        const flow = flows.find(f => f.flowStep === flowStep);
+        return `
+          <section class="bg-white rounded-lg shadow overflow-hidden">
+            <div class="px-4 py-3 border-b bg-gray-50 flex items-start justify-between gap-4">
+              <div>
+                <div class="font-semibold font-mono">${flowStep}</div>
+                <div class="text-xs text-gray-500 mt-1">${flow?.description ?? ''}</div>
+                <div class="text-xs text-gray-500 mt-2">
+                  <span class="font-mono">${flow?.method ?? ''}</span>
+                  <span class="mx-1">·</span>
+                  <span class="font-mono">${flow?.urlContains ?? ''}</span>
+                  ${flow?.bodyGrantType ? `<span class="mx-1">·</span><span class="font-mono">grant_type=${flow.bodyGrantType}</span>` : ''}
+                </div>
+              </div>
+              <button type="button" data-action="edit-flow" data-flow="${flowStep}"
+                class="text-blue-600 hover:underline text-xs whitespace-nowrap">編輯 Endpoint</button>
+            </div>
+            <table class="w-full text-sm">
+              <thead class="text-xs text-gray-500 uppercase">
+                <tr>
+                  <th class="px-3 py-2 text-left">Field</th>
+                  <th class="px-3 py-2 text-left">Location</th>
+                  <th class="px-3 py-2 text-left">Type</th>
+                  <th class="px-3 py-2 text-left">Pattern</th>
+                  <th class="px-3 py-2 text-left">Sort</th>
+                  <th class="px-3 py-2 text-right">Actions</th>
+                </tr>
+              </thead>
+              <tbody class="divide-y divide-gray-100">
+                ${flowFields.map(f => `
+                  <tr class="hover:bg-gray-50">
+                    <td class="px-3 py-2 font-mono font-semibold">${f.fieldName}</td>
+                    <td class="px-3 py-2 text-xs text-gray-600">${f.fieldLocation}</td>
+                    <td class="px-3 py-2">${badge(f.fieldType)}</td>
+                    <td class="px-3 py-2 font-mono text-xs text-gray-500">${f.pattern ?? ''}</td>
+                    <td class="px-3 py-2 text-xs text-gray-500">${f.sortOrder}</td>
+                    <td class="px-3 py-2 text-right whitespace-nowrap">
+                      <button type="button" data-action="edit" data-id="${f.id}" class="text-blue-600 hover:underline text-xs mr-3">編輯</button>
+                      <button type="button" data-action="delete" data-id="${f.id}" class="text-red-600 hover:underline text-xs">刪除</button>
+                    </td>
+                  </tr>
+                `).join('')}
+              </tbody>
+            </table>
+          </section>
+        `;
+      }).join('');
+    }
+
+    function openNewFieldForm() {
+      document.getElementById('form-title').textContent = '新增欄位';
+      document.getElementById('field-id').value = '';
+      document.getElementById('field-flow').value = document.getElementById('filter-flow').value || flows[0]?.flowStep || '';
+      document.getElementById('field-name').value = '';
+      document.getElementById('field-location').value = 'query_params';
+      document.getElementById('field-type').value = 'required';
+      document.getElementById('field-pattern').value = '';
+      document.getElementById('field-sort').value = '0';
+      document.getElementById('form-panel').classList.remove('hidden');
+      document.getElementById('field-name').focus();
+    }
+
+    function openEditFieldForm(field) {
+      document.getElementById('form-title').textContent = '編輯欄位';
+      document.getElementById('field-id').value = field.id;
+      document.getElementById('field-flow').value = field.flowStep;
+      document.getElementById('field-name').value = field.fieldName;
+      document.getElementById('field-location').value = field.fieldLocation;
+      document.getElementById('field-type').value = field.fieldType;
+      document.getElementById('field-pattern').value = field.pattern ?? '';
+      document.getElementById('field-sort').value = field.sortOrder ?? 0;
+      document.getElementById('form-panel').classList.remove('hidden');
+      document.getElementById('field-name').focus();
+    }
+
+    function closeFieldForm() {
+      document.getElementById('form-panel').classList.add('hidden');
+    }
+
+    function openEditFlowForm(flow) {
+      document.getElementById('flow-step').value = flow.flowStep;
+      document.getElementById('flow-description').value = flow.description ?? '';
+      document.getElementById('flow-method').value = flow.method ?? 'GET';
+      document.getElementById('flow-url-contains').value = flow.urlContains ?? '';
+      document.getElementById('flow-grant-type').value = flow.bodyGrantType ?? '';
+      document.getElementById('flow-panel').classList.remove('hidden');
+      document.getElementById('flow-url-contains').focus();
+    }
+
+    function closeFlowForm() {
+      document.getElementById('flow-panel').classList.add('hidden');
+    }
+
+    function formPayload() {
+      return {
+        flowStep: document.getElementById('field-flow').value,
+        fieldName: document.getElementById('field-name').value,
+        fieldLocation: document.getElementById('field-location').value,
+        fieldType: document.getElementById('field-type').value,
+        pattern: document.getElementById('field-pattern').value || null,
+        sortOrder: Number(document.getElementById('field-sort').value || 0),
+      };
+    }
+
+    async function saveField() {
+      const id = document.getElementById('field-id').value;
+      const result = await apiFetch(id ? `/rules/fields/${id}` : '/rules/fields', {
+        method: id ? 'PUT' : 'POST',
+        body: JSON.stringify(formPayload()),
+      });
+      if (!result) return;
+      if (!result.ok) {
+        setMessage(result.data?.error ?? '儲存失敗', false);
+        return;
+      }
+      setMessage('規則已儲存，新的驗證會使用更新後的規則。', true);
+      closeFieldForm();
+      await loadRules();
+    }
+
+    async function saveFlow() {
+      const flowStep = document.getElementById('flow-step').value;
+      const result = await apiFetch(`/rules/flows/${encodeURIComponent(flowStep)}`, {
+        method: 'PUT',
+        body: JSON.stringify({
+          description: document.getElementById('flow-description').value,
+          method: document.getElementById('flow-method').value,
+          urlContains: document.getElementById('flow-url-contains').value,
+          bodyGrantType: document.getElementById('flow-grant-type').value || null,
+        }),
+      });
+      if (!result) return;
+      if (!result.ok) {
+        setMessage(result.data?.error ?? 'Endpoint 儲存失敗', false);
+        return;
+      }
+      setMessage('Endpoint 設定已儲存，新的驗證會使用更新後的 path。', true);
+      closeFlowForm();
+      await loadRules();
+    }
+
+    async function deleteField(id) {
+      if (!confirm('確定刪除此欄位規則？')) return;
+      const result = await apiFetch(`/rules/fields/${id}`, { method: 'DELETE' });
+      if (!result) return;
+      if (!result.ok) {
+        setMessage(result.data?.error ?? '刪除失敗', false);
+        return;
+      }
+      setMessage('規則已刪除。', true);
+      await loadRules();
+    }
+
+    async function loadRules() {
+      const result = await apiFetch('/rules');
+      if (!result) return;
+      flows = result.data.flows;
+      fields = result.data.fields;
+      sortRulesData();
+      populateSelects();
+      renderRules();
+    }
+
+    function flowIndex(flowStep) {
+      const index = FLOW_ORDER.indexOf(flowStep);
+      return index === -1 ? Number.MAX_SAFE_INTEGER : index;
+    }
+
+    function sortRulesData() {
+      flows.sort((a, b) => flowIndex(a.flowStep) - flowIndex(b.flowStep) || a.flowStep.localeCompare(b.flowStep));
+      fields.sort((a, b) =>
+        flowIndex(a.flowStep) - flowIndex(b.flowStep)
+        || a.fieldLocation.localeCompare(b.fieldLocation)
+        || Number(a.sortOrder ?? 0) - Number(b.sortOrder ?? 0)
+        || a.fieldName.localeCompare(b.fieldName)
+      );
+    }
+
+    document.getElementById('rules-container').addEventListener('click', event => {
+      const button = event.target.closest('button[data-action]');
+      if (!button) return;
+      if (button.dataset.action === 'edit-flow') {
+        const flow = flows.find(f => f.flowStep === button.dataset.flow);
+        if (flow) openEditFlowForm(flow);
+        return;
+      }
+      const field = fields.find(f => f.id === button.dataset.id);
+      if (!field) return;
+      if (button.dataset.action === 'edit') openEditFieldForm(field);
+      if (button.dataset.action === 'delete') deleteField(field.id);
+    });
+
+    document.getElementById('form-panel').addEventListener('click', event => {
+      if (event.target.id === 'form-panel') closeFieldForm();
+    });
+
+    document.getElementById('flow-panel').addEventListener('click', event => {
+      if (event.target.id === 'flow-panel') closeFlowForm();
+    });
+
+    document.addEventListener('keydown', event => {
+      if (event.key === 'Escape') {
+        closeFieldForm();
+        closeFlowForm();
+      }
+    });
+
+    loadRules();
+  </script>
+</body>
+</html>

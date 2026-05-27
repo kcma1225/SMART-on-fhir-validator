@@ -1,0 +1,134 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Validate — IUA/SMART Validator</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-gray-100 min-h-screen">
+  <nav class="bg-gray-800 text-white px-6 py-3 flex items-center gap-6">
+    <span class="font-bold">IUA/SMART Validator</span>
+    <a href="/dashboard.html" class="hover:text-gray-300">Dashboard</a>
+    <a href="/results.html" class="hover:text-gray-300">Results</a>
+    <a href="/validate.html" class="text-blue-300 font-medium">Validate</a>
+    <a href="/rules.html" class="hover:text-gray-300">Rules</a>
+    <a href="/settings.html" class="ml-auto hover:text-gray-300">Settings</a>
+    <a href="/test.html" class="hover:text-gray-300">Test</a>
+    <button onclick="logout()" class="text-sm hover:text-gray-300">Logout</button>
+  </nav>
+
+  <div class="max-w-3xl mx-auto p-6">
+    <h2 class="text-2xl font-bold mb-4">On-demand 驗證</h2>
+
+    <div class="bg-white rounded-lg shadow p-5 mb-4">
+      <label class="block text-sm font-medium text-gray-700 mb-2">Connection ID</label>
+      <div class="flex gap-2">
+        <input type="text" id="conn-id" placeholder="輸入 Connection UUID"
+          class="flex-1 border rounded px-3 py-2 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-blue-500">
+        <button onclick="doValidate()"
+          class="bg-blue-600 text-white px-5 py-2 rounded text-sm font-medium hover:bg-blue-700 transition">
+          驗證
+        </button>
+      </div>
+      <p id="error-msg" class="text-red-600 text-sm mt-2 hidden"></p>
+    </div>
+
+    <!-- Results -->
+    <div id="result-section" class="hidden">
+      <div class="bg-white rounded-lg shadow p-5 mb-4">
+        <div class="flex items-center gap-4 mb-3">
+          <div>
+            <span class="text-xs text-gray-500">Connection</span>
+            <div id="res-id" class="font-mono text-sm text-gray-700"></div>
+          </div>
+          <div>
+            <span class="text-xs text-gray-500">Flow Step</span>
+            <div id="res-flow" class="font-mono text-sm font-semibold text-blue-700"></div>
+          </div>
+        </div>
+        <table class="w-full text-sm">
+          <thead class="bg-gray-50 text-gray-600 text-xs uppercase">
+            <tr>
+              <th class="px-3 py-2 text-left">Field</th>
+              <th class="px-3 py-2 text-left">Location</th>
+              <th class="px-3 py-2 text-center">Required</th>
+              <th class="px-3 py-2 text-center">Status</th>
+              <th class="px-3 py-2 text-left">Detail</th>
+            </tr>
+          </thead>
+          <tbody id="res-body" class="divide-y divide-gray-100"></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const token = localStorage.getItem('token');
+    if (!token) location.href = '/login.html';
+
+    async function apiFetch(url, opts = {}) {
+      const res = await fetch('/api' + url, {
+        ...opts,
+        headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json', ...opts.headers },
+      });
+      if (res.status === 401) { localStorage.removeItem('token'); location.href = '/login.html'; return null; }
+      return { ok: res.ok, data: await res.json() };
+    }
+
+    async function logout() {
+      await apiFetch('/auth/logout', { method: 'POST' });
+      localStorage.removeItem('token');
+      location.href = '/login.html';
+    }
+
+    const STATUS_COLOR = { PASS: 'bg-green-100 text-green-700', FAIL: 'bg-red-100 text-red-700', SKIP: 'bg-gray-100 text-gray-600' };
+
+    async function doValidate() {
+      const connId = document.getElementById('conn-id').value.trim();
+      const errEl = document.getElementById('error-msg');
+      errEl.classList.add('hidden');
+      document.getElementById('result-section').classList.add('hidden');
+
+      if (!connId) { errEl.textContent = 'Connection ID 不可為空'; errEl.classList.remove('hidden'); return; }
+
+      const { ok, data } = await apiFetch('/validate', {
+        method: 'POST',
+        body: JSON.stringify({ connectionId: connId }),
+      });
+
+      if (!ok) {
+        errEl.textContent = data?.error ?? '驗證失敗';
+        errEl.classList.remove('hidden');
+        return;
+      }
+
+      document.getElementById('res-id').textContent = data.connectionId;
+      document.getElementById('res-flow').textContent = data.flowStep;
+
+      const tbody = document.getElementById('res-body');
+      if (data.results.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="5" class="px-3 py-4 text-center text-gray-400">無欄位結果（unknown flow）</td></tr>';
+      } else {
+        tbody.innerHTML = data.results.map(r => `
+          <tr class="hover:bg-gray-50">
+            <td class="px-3 py-2 font-mono font-semibold text-sm">${r.field}</td>
+            <td class="px-3 py-2 text-xs text-gray-500">${r.location}</td>
+            <td class="px-3 py-2 text-center">${r.required ? '✓' : ''}</td>
+            <td class="px-3 py-2 text-center">
+              <span class="px-2 py-0.5 rounded text-xs font-medium ${STATUS_COLOR[r.status] || ''}">${r.status}</span>
+            </td>
+            <td class="px-3 py-2 text-xs text-gray-500">${r.detail ?? ''}</td>
+          </tr>
+        `).join('');
+      }
+
+      document.getElementById('result-section').classList.remove('hidden');
+    }
+
+    document.getElementById('conn-id').addEventListener('keydown', e => {
+      if (e.key === 'Enter') doValidate();
+    });
+  </script>
+</body>
+</html>

@@ -1,0 +1,133 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Dashboard — IUA/SMART Validator</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-gray-100 min-h-screen">
+  <nav class="bg-gray-800 text-white px-6 py-3 flex items-center gap-6">
+    <span class="font-bold">IUA/SMART Validator</span>
+    <a href="/dashboard.html" class="text-blue-300 font-medium">Dashboard</a>
+    <a href="/results.html" class="hover:text-gray-300">Results</a>
+    <a href="/validate.html" class="hover:text-gray-300">Validate</a>
+    <a href="/rules.html" class="hover:text-gray-300">Rules</a>
+    <a href="/settings.html" class="ml-auto hover:text-gray-300">Settings</a>
+    <a href="/test.html" class="hover:text-gray-300">Test</a>
+    <button onclick="logout()" class="text-sm hover:text-gray-300">Logout</button>
+  </nav>
+
+  <div class="max-w-5xl mx-auto p-6">
+    <h2 class="text-2xl font-bold mb-6">Dashboard</h2>
+
+    <!-- Polling Status -->
+    <div class="bg-white rounded-lg shadow p-5 mb-6">
+      <h3 class="font-semibold text-lg mb-3">Polling 狀態</h3>
+      <div class="grid grid-cols-2 gap-4 text-sm">
+        <div>
+          <span class="text-gray-500">狀態：</span>
+          <span id="poll-running" class="font-medium">—</span>
+        </div>
+        <div>
+          <span class="text-gray-500">上次執行：</span>
+          <span id="poll-last" class="font-medium">—</span>
+        </div>
+        <div>
+          <span class="text-gray-500">下次執行：</span>
+          <span id="poll-next" class="font-medium">—</span>
+        </div>
+        <div>
+          <span class="text-gray-500">上次處理筆數：</span>
+          <span id="poll-count" class="font-medium">—</span>
+        </div>
+        <div>
+          <span class="text-gray-500">Prism DB：</span>
+          <span id="poll-db" class="font-medium">—</span>
+        </div>
+        <div>
+          <span class="text-gray-500">Polling 設定：</span>
+          <span id="poll-settings" class="font-medium">—</span>
+        </div>
+        <div>
+          <span class="text-gray-500">暫停原因：</span>
+          <span id="poll-skip" class="font-medium">—</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Today's Stats -->
+    <div class="bg-white rounded-lg shadow p-5 mb-4">
+      <h3 class="font-semibold text-lg mb-3">今日統計</h3>
+      <div class="grid grid-cols-3 gap-4 text-center">
+        <div class="bg-gray-50 rounded p-4">
+          <div id="stat-total" class="text-3xl font-bold text-gray-800">—</div>
+          <div class="text-gray-500 text-sm mt-1">已驗證</div>
+        </div>
+        <div class="bg-green-50 rounded p-4">
+          <div id="stat-pass" class="text-3xl font-bold text-green-600">—</div>
+          <div class="text-gray-500 text-sm mt-1">PASS</div>
+        </div>
+        <div class="bg-red-50 rounded p-4">
+          <div id="stat-fail" class="text-3xl font-bold text-red-600">—</div>
+          <div class="text-gray-500 text-sm mt-1">FAIL</div>
+        </div>
+      </div>
+    </div>
+
+    <p class="text-xs text-gray-400 text-right">每 30 秒自動更新</p>
+  </div>
+
+  <script>
+    const token = localStorage.getItem('token');
+    if (!token) location.href = '/login.html';
+
+    async function apiFetch(url, opts = {}) {
+      const res = await fetch('/api' + url, {
+        ...opts,
+        headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json', ...opts.headers },
+      });
+      if (res.status === 401) { localStorage.removeItem('token'); location.href = '/login.html'; return null; }
+      return res.json();
+    }
+
+    async function logout() {
+      await apiFetch('/auth/logout', { method: 'POST' });
+      localStorage.removeItem('token');
+      location.href = '/login.html';
+    }
+
+    function fmt(iso) {
+      if (!iso) return '—';
+      return new Date(iso).toLocaleString('zh-TW');
+    }
+
+    async function refresh() {
+      const [poll, stats] = await Promise.all([
+        apiFetch('/polling/status'),
+        apiFetch('/stats'),
+      ]);
+
+      if (poll) {
+        document.getElementById('poll-running').textContent = poll.running ? '⚡ 執行中' : '⏸ 待機';
+        document.getElementById('poll-last').textContent = fmt(poll.lastRun);
+        document.getElementById('poll-next').textContent = fmt(poll.nextRun);
+        document.getElementById('poll-count').textContent = poll.processedInLastRun ?? '0';
+        document.getElementById('poll-db').textContent = poll.prismDatabaseReady ? '已通過測試' : '未通過測試';
+        document.getElementById('poll-settings').textContent = poll.pollingEnabled
+          ? `啟用，${poll.pollingIntervalSeconds}s / batch ${poll.pollingBatchSize}`
+          : '停用';
+        document.getElementById('poll-skip').textContent = poll.lastSkipReason ?? '—';
+      }
+      if (stats) {
+        document.getElementById('stat-total').textContent = stats.total;
+        document.getElementById('stat-pass').textContent = stats.pass;
+        document.getElementById('stat-fail').textContent = stats.fail;
+      }
+    }
+
+    refresh();
+    setInterval(refresh, 30000);
+  </script>
+</body>
+</html>

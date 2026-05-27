@@ -1,0 +1,78 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("VALIDATOR_DATABASE_URL")
+}
+
+model ValidationResult {
+  id            String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  connectionId  String   @map("connection_id")
+  institutionId Int?     @map("institution_id")
+  userId        Int?     @map("user_id")
+  flowStep      String   @map("flow_step")
+  fieldLocation String   @map("field_location")
+  fieldName     String   @map("field_name")
+  required      Boolean
+  status        String
+  detail        String?
+  validatedAt   DateTime @default(now()) @map("validated_at")
+
+  @@index([connectionId])
+  @@index([institutionId])
+  @@index([flowStep])
+  @@index([status])
+  @@map("validation_results")
+}
+
+model ProcessedConnection {
+  connectionId String   @id @map("connection_id")
+  processedAt  DateTime @default(now()) @map("processed_at")
+
+  @@map("processed_connections")
+}
+
+model FlowIdentifier {
+  id            String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  flowStep      String   @unique @map("flow_step")
+  description   String
+  method        String
+  urlContains   String   @map("url_contains")
+  bodyGrantType String?  @map("body_grant_type")
+  priority      Int
+  createdAt     DateTime @default(now()) @map("created_at")
+  updatedAt     DateTime @updatedAt @map("updated_at")
+
+  @@index([priority])
+  @@map("flow_identifiers")
+}
+
+model FlowRuleField {
+  id            String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  flowStep      String   @map("flow_step")
+  fieldName     String   @map("field_name")
+  fieldLocation String   @map("field_location")
+  fieldType     String   @map("field_type")
+  pattern       String?
+  sortOrder     Int      @default(0) @map("sort_order")
+  createdAt     DateTime @default(now()) @map("created_at")
+  updatedAt     DateTime @updatedAt @map("updated_at")
+
+  @@index([flowStep])
+  @@map("flow_rule_fields")
+}
+
+model ValidatorSetting {
+  id                         Int       @id
+  prismDatabaseUrl           String?   @map("prism_database_url")
+  prismDatabaseVerifiedAt    DateTime? @map("prism_database_verified_at")
+  prismDatabaseVerifiedUrl   String?   @map("prism_database_verified_url")
+  pollingEnabled             Boolean   @default(true) @map("polling_enabled")
+  pollingIntervalSeconds     Int       @default(30) @map("polling_interval_seconds")
+  pollingBatchSize           Int       @default(100) @map("polling_batch_size")
+  updatedAt                  DateTime  @updatedAt @map("updated_at")
+
+  @@map("validator_settings")
+}

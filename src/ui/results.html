@@ -1,0 +1,161 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Results — IUA/SMART Validator</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-gray-100 min-h-screen">
+  <nav class="bg-gray-800 text-white px-6 py-3 flex items-center gap-6">
+    <span class="font-bold">IUA/SMART Validator</span>
+    <a href="/dashboard.html" class="hover:text-gray-300">Dashboard</a>
+    <a href="/results.html" class="text-blue-300 font-medium">Results</a>
+    <a href="/validate.html" class="hover:text-gray-300">Validate</a>
+    <a href="/rules.html" class="hover:text-gray-300">Rules</a>
+    <a href="/settings.html" class="ml-auto hover:text-gray-300">Settings</a>
+    <a href="/test.html" class="hover:text-gray-300">Test</a>
+    <button onclick="logout()" class="text-sm hover:text-gray-300">Logout</button>
+  </nav>
+
+  <div class="max-w-7xl mx-auto p-6">
+    <h2 class="text-2xl font-bold mb-4">驗證結果列表</h2>
+
+    <!-- Filters -->
+    <div class="bg-white rounded-lg shadow p-4 mb-4 grid grid-cols-2 md:grid-cols-4 gap-3">
+      <div>
+        <label class="block text-xs text-gray-500 mb-1">Institution ID</label>
+        <input type="number" id="f-institution" placeholder="全部"
+          class="w-full border rounded px-2 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-blue-500">
+      </div>
+      <div>
+        <label class="block text-xs text-gray-500 mb-1">Flow Step</label>
+        <select id="f-flowstep" class="w-full border rounded px-2 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-blue-500">
+          <option value="">全部</option>
+          <option value="smart_metadata">smart_metadata</option>
+          <option value="authorization_request">authorization_request</option>
+          <option value="token_request_auth_code">token_request_auth_code</option>
+          <option value="token_request_client_cred">token_request_client_cred</option>
+          <option value="token_request_refresh">token_request_refresh</option>
+          <option value="fhir_request">fhir_request</option>
+          <option value="unknown">unknown</option>
+        </select>
+      </div>
+      <div>
+        <label class="block text-xs text-gray-500 mb-1">Status</label>
+        <select id="f-status" class="w-full border rounded px-2 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-blue-500">
+          <option value="">全部</option>
+          <option value="PASS">PASS</option>
+          <option value="FAIL">FAIL</option>
+          <option value="SKIP">SKIP</option>
+        </select>
+      </div>
+      <div class="flex items-end">
+        <button onclick="loadResults()" class="w-full bg-blue-600 text-white py-1.5 rounded text-sm hover:bg-blue-700 transition">
+          查詢
+        </button>
+      </div>
+      <div>
+        <label class="block text-xs text-gray-500 mb-1">From</label>
+        <input type="datetime-local" id="f-from"
+          class="w-full border rounded px-2 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-blue-500">
+      </div>
+      <div>
+        <label class="block text-xs text-gray-500 mb-1">To</label>
+        <input type="datetime-local" id="f-to"
+          class="w-full border rounded px-2 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-blue-500">
+      </div>
+    </div>
+
+    <!-- Table -->
+    <div class="bg-white rounded-lg shadow overflow-auto">
+      <table class="w-full text-sm">
+        <thead class="bg-gray-50 text-gray-600 text-xs uppercase">
+          <tr>
+            <th class="px-3 py-2 text-left">Connection ID</th>
+            <th class="px-3 py-2 text-left">Inst</th>
+            <th class="px-3 py-2 text-left">Flow Step</th>
+            <th class="px-3 py-2 text-left">Field</th>
+            <th class="px-3 py-2 text-left">Location</th>
+            <th class="px-3 py-2 text-center">Req</th>
+            <th class="px-3 py-2 text-center">Status</th>
+            <th class="px-3 py-2 text-left">Detail</th>
+            <th class="px-3 py-2 text-left">Validated At</th>
+          </tr>
+        </thead>
+        <tbody id="results-body" class="divide-y divide-gray-100">
+          <tr><td colspan="9" class="px-3 py-6 text-center text-gray-400">按查詢顯示結果</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p id="result-count" class="text-xs text-gray-400 mt-2"></p>
+  </div>
+
+  <script>
+    const token = localStorage.getItem('token');
+    if (!token) location.href = '/login.html';
+
+    async function apiFetch(url, opts = {}) {
+      const res = await fetch('/api' + url, {
+        ...opts,
+        headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json', ...opts.headers },
+      });
+      if (res.status === 401) { localStorage.removeItem('token'); location.href = '/login.html'; return null; }
+      return res.json();
+    }
+
+    async function logout() {
+      await apiFetch('/auth/logout', { method: 'POST' });
+      localStorage.removeItem('token');
+      location.href = '/login.html';
+    }
+
+    const STATUS_COLOR = { PASS: 'bg-green-100 text-green-700', FAIL: 'bg-red-100 text-red-700', SKIP: 'bg-gray-100 text-gray-600' };
+
+    async function loadResults() {
+      const params = new URLSearchParams();
+      const inst = document.getElementById('f-institution').value;
+      const flow = document.getElementById('f-flowstep').value;
+      const status = document.getElementById('f-status').value;
+      const from = document.getElementById('f-from').value;
+      const to = document.getElementById('f-to').value;
+
+      if (inst) params.set('institutionId', inst);
+      if (flow) params.set('flowStep', flow);
+      if (status) params.set('status', status);
+      if (from) params.set('from', new Date(from).toISOString());
+      if (to) params.set('to', new Date(to).toISOString());
+      params.set('limit', '200');
+
+      const data = await apiFetch('/results?' + params.toString());
+      if (!data) return;
+
+      const tbody = document.getElementById('results-body');
+      document.getElementById('result-count').textContent = `共 ${data.length} 筆`;
+
+      if (data.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="9" class="px-3 py-6 text-center text-gray-400">無資料</td></tr>';
+        return;
+      }
+
+      tbody.innerHTML = data.map(r => `
+        <tr class="hover:bg-gray-50">
+          <td class="px-3 py-2 font-mono text-xs text-gray-500">${r.connectionId.slice(0, 8)}…</td>
+          <td class="px-3 py-2">${r.institutionId ?? '—'}</td>
+          <td class="px-3 py-2 text-xs font-mono">${r.flowStep}</td>
+          <td class="px-3 py-2 font-mono text-xs font-semibold">${r.fieldName}</td>
+          <td class="px-3 py-2 text-xs text-gray-500">${r.fieldLocation}</td>
+          <td class="px-3 py-2 text-center">${r.required ? '✓' : ''}</td>
+          <td class="px-3 py-2 text-center">
+            <span class="px-2 py-0.5 rounded text-xs font-medium ${STATUS_COLOR[r.status] || ''}">${r.status}</span>
+          </td>
+          <td class="px-3 py-2 text-xs text-gray-500 max-w-xs truncate">${r.detail ?? ''}</td>
+          <td class="px-3 py-2 text-xs text-gray-400">${new Date(r.validatedAt).toLocaleString('zh-TW')}</td>
+        </tr>
+      `).join('');
+    }
+
+    loadResults();
+  </script>
+</body>
+</html>
