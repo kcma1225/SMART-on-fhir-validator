@@ -41,7 +41,7 @@ export async function getRecentConnections(limit: number): Promise<PrismConnecti
      WHERE created_at >= $1
        AND is_system_heartbeat = false
        AND is_path_ignored = false
-     ORDER BY created_at ASC
+     ORDER BY created_at DESC
      LIMIT $2`,
     [since, limit],
   );

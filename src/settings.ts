@@ -4,6 +4,19 @@ const SETTINGS_ID = 1;
 const DEFAULT_POLLING_ENABLED = true;
 const DEFAULT_POLLING_INTERVAL_SECONDS = 30;
 const DEFAULT_POLLING_BATCH_SIZE = 100;
+let settingsInitialized = false;
+let settingsInitPromise: Promise<void> | null = null;
+
+function normalizeBaseUrl(url: string): string | null {
+  const trimmed = url.trim().replace(/\/$/, '');
+  if (!trimmed) return null;
+
+  const parsed = new URL(trimmed);
+  if (!['http:', 'https:'].includes(parsed.protocol)) {
+    throw new Error('Base URL must start with http:// or https://');
+  }
+  return trimmed;
+}
 
 export interface PrismDatabaseSettings {
   url: string | null;
@@ -18,18 +31,31 @@ export interface PollingSettings {
 }
 
 async function ensureSettingsRow(): Promise<void> {
-  const prisma = getPrismaClient();
-  await prisma.validatorSetting.upsert({
-    where: { id: SETTINGS_ID },
-    create: {
-      id: SETTINGS_ID,
-      prismDatabaseUrl: process.env.PRISM_DATABASE_URL || null,
-      pollingEnabled: DEFAULT_POLLING_ENABLED,
-      pollingIntervalSeconds: DEFAULT_POLLING_INTERVAL_SECONDS,
-      pollingBatchSize: DEFAULT_POLLING_BATCH_SIZE,
-    },
-    update: {},
-  });
+  if (settingsInitialized) return;
+  if (settingsInitPromise) return settingsInitPromise;
+
+  settingsInitPromise = (async () => {
+    const prisma = getPrismaClient();
+    const existing = await prisma.validatorSetting.findUnique({ where: { id: SETTINGS_ID } });
+    if (!existing) {
+      await prisma.validatorSetting.create({
+        data: {
+          id: SETTINGS_ID,
+          prismDatabaseUrl: process.env.PRISM_DATABASE_URL || null,
+          pollingEnabled: DEFAULT_POLLING_ENABLED,
+          pollingIntervalSeconds: DEFAULT_POLLING_INTERVAL_SECONDS,
+          pollingBatchSize: DEFAULT_POLLING_BATCH_SIZE,
+        },
+      });
+    }
+    settingsInitialized = true;
+  })();
+
+  try {
+    await settingsInitPromise;
+  } finally {
+    settingsInitPromise = null;
+  }
 }
 
 export async function getPrismDatabaseSettings(): Promise<PrismDatabaseSettings> {
@@ -100,16 +126,21 @@ export async function getBaseUrl(): Promise<string | null> {
   await ensureSettingsRow();
   const prisma = getPrismaClient();
   const setting = await prisma.validatorSetting.findUnique({ where: { id: SETTINGS_ID } });
-  return setting?.baseUrl ?? null;
+  if (!setting?.baseUrl) return null;
+  try {
+    return normalizeBaseUrl(setting.baseUrl);
+  } catch {
+    return null;
+  }
 }
 
 export async function saveBaseUrl(url: string): Promise<string | null> {
   await ensureSettingsRow();
   const prisma = getPrismaClient();
-  const trimmed = url.trim().replace(/\/$/, '');
+  const trimmed = normalizeBaseUrl(url);
   const setting = await prisma.validatorSetting.update({
     where: { id: SETTINGS_ID },
-    data: { baseUrl: trimmed || null },
+    data: { baseUrl: trimmed },
   });
   return setting.baseUrl;
 }

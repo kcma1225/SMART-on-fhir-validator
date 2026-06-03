@@ -25,6 +25,10 @@ model ValidationResult {
   @@index([serverId])
   @@index([flowStep])
   @@index([status])
+  @@index([validatedAt])
+  @@index([serverId, validatedAt])
+  @@index([flowStep, validatedAt])
+  @@index([status, validatedAt])
   @@map("validation_results")
 }
 

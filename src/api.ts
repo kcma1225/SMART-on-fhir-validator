@@ -39,6 +39,18 @@ const ADMIN_USER = process.env.ADMIN_USER ?? 'admin';
 const ADMIN_PASS = process.env.ADMIN_PASS ?? 'admin123';
 const API_PORT = Number(process.env.API_PORT ?? 3000);
 
+function parsePagination(limitRaw = '100', offsetRaw = '0'): { take: number; skip: number } {
+  const parsedLimit = Number(limitRaw);
+  const parsedOffset = Number(offsetRaw);
+  const take = Number.isInteger(parsedLimit) && parsedLimit > 0
+    ? Math.min(parsedLimit, 1000)
+    : 100;
+  const skip = Number.isInteger(parsedOffset) && parsedOffset > 0
+    ? parsedOffset
+    : 0;
+  return { take, skip };
+}
+
 function createSession(): string {
   const token = crypto.randomBytes(32).toString('hex');
   sessions.set(token, Date.now());
@@ -286,6 +298,7 @@ app.get('/results', { preHandler: requireAuth }, async (req) => {
   } = req.query as Record<string, string>;
 
   const prisma = getPrismaClient();
+  const { take, skip } = parsePagination(limit, offset);
 
   if (shareToken) {
     const resolvedId = await getConnectionIdByShareToken(shareToken).catch(() => null);
@@ -293,8 +306,8 @@ app.get('/results', { preHandler: requireAuth }, async (req) => {
     return prisma.validationResult.findMany({
       where: { connectionId: resolvedId },
       orderBy: { validatedAt: 'desc' },
-      take: Math.min(Number(limit), 1000),
-      skip: Number(offset),
+      take,
+      skip,
     });
   }
 
@@ -312,8 +325,8 @@ app.get('/results', { preHandler: requireAuth }, async (req) => {
       } : {}),
     },
     orderBy: { validatedAt: 'desc' },
-    take: Math.min(Number(limit), 1000),
-    skip: Number(offset),
+    take,
+    skip,
   });
 });
 
