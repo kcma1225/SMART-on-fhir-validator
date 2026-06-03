@@ -3,40 +3,86 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Validate — IUA/SMART Validator</title>
-  <script>if(localStorage.getItem('darkMode')==='1')document.documentElement.classList.add('dark')</script>
-  <script src="https://cdn.tailwindcss.com"></script>
-  <script>tailwind.config={darkMode:'class'}</script>
+  <title>Inspect — IUA/SMART Validator</title>
   <script src="/ui.js?v=2"></script>
+  <script src="https://cdn.tailwindcss.com"></script>
 </head>
 <body class="bg-gray-100 dark:bg-gray-900 min-h-screen transition-colors duration-200">
+  <div id="tip" style="display:none;position:fixed;z-index:9999;pointer-events:none;max-width:320px"
+    class="bg-gray-900 text-white text-xs rounded px-2.5 py-1.5 shadow-lg leading-relaxed"></div>
+
   <div data-app-nav="validate"></div>
 
   <div class="max-w-3xl mx-auto p-6">
-    <h2 class="text-2xl font-bold mb-4 dark:text-gray-100">On-demand 驗證</h2>
+    <h2 class="text-2xl font-bold mb-4 dark:text-gray-100">Connection Inspect</h2>
 
     <div class="bg-white dark:bg-gray-800 rounded-lg shadow p-5 mb-4">
-      <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Connection ID</label>
-      <div class="flex gap-2">
-        <input type="text" id="conn-id" placeholder="輸入 Connection UUID"
-          class="flex-1 border border-gray-300 dark:border-gray-600 rounded px-3 py-2 text-sm font-mono bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500">
-        <button onclick="doValidate()" class="bg-blue-600 text-white px-5 py-2 rounded text-sm font-medium hover:bg-blue-700 transition">驗證</button>
+      <!-- Share Token (priority) -->
+      <div class="mb-3 pb-3 border-b border-gray-100 dark:border-gray-700">
+        <label class="flex items-center gap-1.5 text-xs font-semibold text-blue-600 dark:text-blue-400 mb-1">
+          Share Token
+          <span id="tip-trigger"
+            class="inline-flex items-center justify-center w-4 h-4 rounded-full bg-blue-100 dark:bg-blue-900 text-blue-600 dark:text-blue-300 text-xs font-bold cursor-default select-none">!</span>
+        </label>
+        <input type="text" id="share-token" placeholder="輸入 Share Token 或完整網址…"
+          class="w-full border-2 border-blue-300 dark:border-blue-600 rounded px-3 py-2 text-sm font-mono bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 placeholder-gray-400 dark:placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500">
+      </div>
+      <!-- Connection ID -->
+      <div id="conn-wrap">
+        <label class="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">Connection ID</label>
+        <input type="text" id="conn-id" placeholder="輸入 Connection UUID…"
+          class="w-full border border-gray-300 dark:border-gray-600 rounded px-3 py-2 text-sm font-mono bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 placeholder-gray-400 dark:placeholder-gray-500 focus:outline-none focus:ring-1 focus:ring-blue-500">
+      </div>
+
+      <div id="status-row" style="display:none" class="mt-3 flex items-center gap-2 text-sm text-gray-400 dark:text-gray-500">
+        <svg class="animate-spin h-4 w-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+          <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+          <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"></path>
+        </svg>
+        驗證中…
       </div>
       <p id="error-msg" class="text-red-600 dark:text-red-400 text-sm mt-2 hidden"></p>
     </div>
 
+    <!-- Result section -->
     <div id="result-section" class="hidden">
       <div class="bg-white dark:bg-gray-800 rounded-lg shadow p-5 mb-4">
-        <div class="flex items-center gap-4 mb-3">
-          <div>
-            <span class="text-xs text-gray-500 dark:text-gray-400">Connection</span>
-            <div id="res-id" class="font-mono text-sm text-gray-700 dark:text-gray-300"></div>
+        <div class="space-y-2.5">
+          <!-- Connection ID -->
+          <div class="flex items-center gap-2 min-w-0">
+            <span class="text-xs text-gray-500 dark:text-gray-400 w-28 flex-shrink-0">Connection ID</span>
+            <div class="flex items-center gap-1 min-w-0">
+              <span id="res-id" class="font-mono text-sm text-gray-800 dark:text-gray-200 truncate"></span>
+              <button id="copy-id-btn" onclick="copyField('res-id','copy-id-btn')"
+                class="flex-shrink-0 p-0.5 rounded text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 transition-colors" title="複製 Connection ID"></button>
+              <a id="res-id-link" href="#" target="_blank" rel="noopener"
+                class="flex-shrink-0 p-0.5 rounded text-gray-400 hover:text-blue-500 dark:hover:text-blue-400 transition-colors hidden" title="在 Prism 查看">
+                <svg xmlns="http://www.w3.org/2000/svg" class="w-3.5 h-3.5" style="pointer-events:none" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"/></svg>
+              </a>
+            </div>
           </div>
-          <div>
-            <span class="text-xs text-gray-500 dark:text-gray-400">Flow Step</span>
+          <!-- Share Token -->
+          <div id="res-token-row" class="hidden flex items-center gap-2 min-w-0">
+            <span class="text-xs text-gray-500 dark:text-gray-400 w-28 flex-shrink-0">Share Token</span>
+            <div class="flex items-center gap-1 min-w-0">
+              <span id="res-token" class="font-mono text-sm text-gray-800 dark:text-gray-200 truncate"></span>
+              <button id="copy-token-btn" onclick="copyField('res-token','copy-token-btn')"
+                class="flex-shrink-0 p-0.5 rounded text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 transition-colors" title="複製 Share Token"></button>
+              <a id="res-token-link" href="#" target="_blank" rel="noopener"
+                class="flex-shrink-0 p-0.5 rounded text-gray-400 hover:text-blue-500 dark:hover:text-blue-400 transition-colors hidden" title="在 Prism 查看">
+                <svg xmlns="http://www.w3.org/2000/svg" class="w-3.5 h-3.5" style="pointer-events:none" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"/></svg>
+              </a>
+            </div>
+          </div>
+          <!-- Flow Step -->
+          <div class="flex items-center gap-2">
+            <span class="text-xs text-gray-500 dark:text-gray-400 w-28 flex-shrink-0">Flow Step</span>
             <div id="res-flow" class="font-mono text-sm font-semibold text-blue-700 dark:text-blue-400"></div>
           </div>
         </div>
+      </div>
+
+      <div class="bg-white dark:bg-gray-800 rounded-lg shadow overflow-auto">
         <table class="w-full text-sm">
           <thead class="bg-gray-50 dark:bg-gray-700 text-gray-600 dark:text-gray-300 text-xs uppercase">
             <tr>
@@ -58,11 +104,58 @@
     if (!token) location.href = '/login.html';
 
     async function apiFetch(url, opts = {}) {
-      const res = await fetch('/api' + url, { ...opts, headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json', ...opts.headers } });
+      const res = await fetch('/api' + url, {
+        ...opts,
+        headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json', ...opts.headers },
+      });
       if (res.status === 401) { localStorage.removeItem('token'); location.href = '/login.html'; return null; }
-      return { ok: res.ok, data: await res.json() };
+      const data = await res.json().catch(() => null);
+      if (!res.ok) throw new Error(data?.error ?? 'API request failed');
+      return data;
     }
-    async function logout() { await apiFetch('/auth/logout', { method: 'POST' }); localStorage.removeItem('token'); location.href = '/login.html'; }
+    async function logout() {
+      await apiFetch('/auth/logout', { method: 'POST' });
+      localStorage.removeItem('token'); location.href = '/login.html';
+    }
+
+    // Tooltip
+    const tipEl = document.getElementById('tip');
+    function moveTip(e) {
+      const pad = 12; let x = e.clientX + pad, y = e.clientY + pad;
+      const w = tipEl.offsetWidth, h = tipEl.offsetHeight;
+      if (x + w > window.innerWidth - 8) x = e.clientX - w - pad;
+      if (y + h > window.innerHeight - 8) y = e.clientY - h - pad;
+      tipEl.style.left = x + 'px'; tipEl.style.top = y + 'px';
+    }
+    const tipTrigger = document.getElementById('tip-trigger');
+    tipTrigger.onmouseenter = e => { tipEl.textContent = '最高優先；填入後 Connection ID 暫停'; tipEl.style.display = 'block'; moveTip(e); };
+    tipTrigger.onmousemove = moveTip;
+    tipTrigger.onmouseleave = () => { tipEl.style.display = 'none'; };
+
+    const SHARE_URL_PREFIX = 'https://twcat-gazelle.dicom.org.tw/prism/view/c/';
+    function extractShareToken(raw) {
+      return raw.startsWith(SHARE_URL_PREFIX) ? raw.slice(SHARE_URL_PREFIX.length) : raw;
+    }
+
+    const COPY_SVG = `<svg xmlns="http://www.w3.org/2000/svg" class="w-3.5 h-3.5" style="pointer-events:none" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path stroke-linecap="round" stroke-linejoin="round" d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg>`;
+    const CHECK_SVG = `<svg xmlns="http://www.w3.org/2000/svg" class="w-3.5 h-3.5 text-green-500" style="pointer-events:none" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5"><path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7"/></svg>`;
+
+    async function copyField(textElId, btnId) {
+      const text = document.getElementById(textElId).textContent.trim();
+      const btn = document.getElementById(btnId);
+      try {
+        if (navigator.clipboard) {
+          await navigator.clipboard.writeText(text);
+        } else {
+          const ta = document.createElement('textarea');
+          ta.value = text; ta.style.cssText = 'position:fixed;opacity:0';
+          document.body.appendChild(ta); ta.select(); document.execCommand('copy');
+          document.body.removeChild(ta);
+        }
+      } catch {}
+      btn.innerHTML = CHECK_SVG;
+      setTimeout(() => { btn.innerHTML = COPY_SVG; }, 1500);
+    }
 
     const STATUS_COLOR = {
       PASS: 'bg-green-100 text-green-700 dark:bg-green-900/50 dark:text-green-300',
@@ -70,18 +163,99 @@
       SKIP: 'bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-400',
     };
 
-    async function doValidate() {
-      const connId = document.getElementById('conn-id').value.trim();
-      const errEl = document.getElementById('error-msg');
-      errEl.classList.add('hidden');
+    let baseUrl = '';
+    let debounceTimer = null;
+    let currentVersion = 0;
+
+    function onShareInput() {
+      const active = document.getElementById('share-token').value.trim() !== '';
+      const connWrap = document.getElementById('conn-wrap');
+      const connInput = document.getElementById('conn-id');
+      connWrap.style.opacity = active ? '0.4' : '';
+      connWrap.style.pointerEvents = active ? 'none' : '';
+      connInput.disabled = active;
+      scheduleValidate();
+    }
+
+    function scheduleValidate() {
+      clearTimeout(debounceTimer);
+      debounceTimer = setTimeout(doValidate, 400);
+    }
+
+    function setLoading(on) {
+      document.getElementById('status-row').style.display = on ? 'flex' : 'none';
+      if (on) document.getElementById('error-msg').classList.add('hidden');
+    }
+
+    function showError(msg) {
+      const el = document.getElementById('error-msg');
+      el.textContent = msg; el.classList.remove('hidden');
+      setLoading(false);
       document.getElementById('result-section').classList.add('hidden');
-      if (!connId) { errEl.textContent = 'Connection ID 不可為空'; errEl.classList.remove('hidden'); return; }
+    }
 
-      const { ok, data } = await apiFetch('/validate', { method: 'POST', body: JSON.stringify({ connectionId: connId }) });
-      if (!ok) { errEl.textContent = data?.error ?? '驗證失敗'; errEl.classList.remove('hidden'); return; }
+    async function doValidate() {
+      const shareRaw = document.getElementById('share-token').value.trim();
+      const connRaw = document.getElementById('conn-id').value.trim();
+      const shareToken = shareRaw ? extractShareToken(shareRaw) : '';
+      const connectionId = shareToken ? '' : connRaw;
 
+      if (!shareToken && !connectionId) {
+        setLoading(false);
+        document.getElementById('error-msg').classList.add('hidden');
+        document.getElementById('result-section').classList.add('hidden');
+        return;
+      }
+
+      const version = ++currentVersion;
+      setLoading(true);
+
+      try {
+        const body = shareToken ? { shareToken } : { connectionId };
+        const data = await apiFetch('/validate', { method: 'POST', body: JSON.stringify(body) });
+        if (version !== currentVersion || !data) return;
+        renderResult(data);
+      } catch (err) {
+        if (version !== currentVersion) return;
+        showError(err.message);
+      }
+    }
+
+    function renderResult(data) {
+      setLoading(false);
+
+      // Connection ID
       document.getElementById('res-id').textContent = data.connectionId;
+      document.getElementById('copy-id-btn').innerHTML = COPY_SVG;
+      const idLink = document.getElementById('res-id-link');
+      if (baseUrl && data.connectionId) {
+        idLink.href = `${baseUrl}/connections/${encodeURIComponent(data.connectionId)}`;
+        idLink.classList.remove('hidden');
+      } else {
+        idLink.classList.add('hidden');
+      }
+
+      // Share Token
+      const tokenRow = document.getElementById('res-token-row');
+      if (data.shareToken) {
+        document.getElementById('res-token').textContent = data.shareToken;
+        document.getElementById('copy-token-btn').innerHTML = COPY_SVG;
+        const tokenLink = document.getElementById('res-token-link');
+        if (baseUrl) {
+          tokenLink.href = `${baseUrl}/view/c/${encodeURIComponent(data.shareToken)}`;
+          tokenLink.classList.remove('hidden');
+        } else {
+          tokenLink.classList.add('hidden');
+        }
+        tokenRow.style.display = 'flex';
+      } else {
+        tokenRow.style.display = 'none';
+      }
+
+      // Flow Step
       document.getElementById('res-flow').textContent = data.flowStep;
+
+      // Results table
       const tbody = document.getElementById('res-body');
       if (data.results.length === 0) {
         tbody.innerHTML = '<tr><td colspan="5" class="px-3 py-4 text-center text-gray-400 dark:text-gray-500">無欄位結果（unknown flow）</td></tr>';
@@ -91,14 +265,38 @@
             <td class="px-3 py-2 font-mono font-semibold text-sm dark:text-gray-200">${escapeHtml(r.field)}</td>
             <td class="px-3 py-2 text-xs text-gray-500 dark:text-gray-400">${escapeHtml(r.location)}</td>
             <td class="px-3 py-2 text-center text-gray-600 dark:text-gray-400">${r.required ? '✓' : ''}</td>
-            <td class="px-3 py-2 text-center"><span class="px-2 py-0.5 rounded text-xs font-medium ${STATUS_COLOR[r.status]||''}">${escapeHtml(r.status)}</span></td>
-            <td class="px-3 py-2 text-xs text-gray-500 dark:text-gray-400">${escapeHtml(r.detail)}</td>
+            <td class="px-3 py-2 text-center"><span class="px-2 py-0.5 rounded text-xs font-medium ${STATUS_COLOR[r.status] || ''}">${escapeHtml(r.status)}</span></td>
+            <td class="px-3 py-2 text-xs text-gray-500 dark:text-gray-400">${escapeHtml(r.detail ?? '')}</td>
           </tr>`).join('');
       }
+
       document.getElementById('result-section').classList.remove('hidden');
     }
 
-    document.getElementById('conn-id').addEventListener('keydown', e => { if (e.key === 'Enter') doValidate(); });
+    async function init() {
+      const buResult = await apiFetch('/settings/base-url').catch(() => null);
+      if (buResult?.baseUrl) baseUrl = buResult.baseUrl;
+
+      const params = new URLSearchParams(location.search);
+      const paramConn = params.get('connectionId');
+      const paramShare = params.get('shareToken');
+
+      if (paramShare) {
+        document.getElementById('share-token').value = paramShare;
+        document.getElementById('conn-wrap').style.opacity = '0.4';
+        document.getElementById('conn-wrap').style.pointerEvents = 'none';
+        document.getElementById('conn-id').disabled = true;
+        doValidate();
+      } else if (paramConn) {
+        document.getElementById('conn-id').value = paramConn;
+        doValidate();
+      }
+    }
+
+    document.getElementById('share-token').addEventListener('input', onShareInput);
+    document.getElementById('conn-id').addEventListener('input', scheduleValidate);
+
+    init();
   </script>
 </body>
 </html>

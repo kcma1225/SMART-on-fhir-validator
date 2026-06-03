@@ -310,15 +310,29 @@ app.get('/stats', { preHandler: requireAuth }, async () => {
 // ── Validate ──────────────────────────────────────────────────────────────────
 
 app.post('/validate', { preHandler: requireAuth }, async (req, reply) => {
-  const { connectionId } = req.body as { connectionId: string };
-  if (!connectionId) return reply.code(400).send({ error: 'connectionId required' });
+  const { connectionId, shareToken } = req.body as { connectionId?: string; shareToken?: string };
 
-  const conn = await getConnectionById(connectionId);
+  let resolvedId = connectionId?.trim() ?? '';
+  let resolvedToken: string | null = null;
+
+  if (shareToken?.trim()) {
+    resolvedToken = shareToken.trim();
+    const found = await getConnectionIdByShareToken(resolvedToken).catch(() => null);
+    if (!found) return reply.code(404).send({ error: 'ShareToken not found' });
+    resolvedId = found;
+  }
+
+  if (!resolvedId) return reply.code(400).send({ error: 'connectionId or shareToken required' });
+
+  const conn = await getConnectionById(resolvedId);
   if (!conn) return reply.code(404).send({ error: 'Connection not found' });
+
+  if (!resolvedToken) resolvedToken = conn.share_token ?? null;
 
   const output = await validateAndSave(conn);
   return {
     connectionId: output.connectionId,
+    shareToken: resolvedToken,
     flowStep: output.flowStep,
     results: output.results.map(r => ({
       field: r.field,

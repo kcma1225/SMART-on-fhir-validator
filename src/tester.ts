@@ -62,6 +62,7 @@ export function runTests(): TestReport {
       id: fixture.id,
       user_id: null,
       server_id: null,
+      share_token: null,
       req_method: fixture.input.req_method,
       req_url: fixture.input.req_url,
       req_headers: fixture.input.req_headers,

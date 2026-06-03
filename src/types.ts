@@ -8,6 +8,7 @@ export interface PrismConnection {
   id: string;
   user_id: number | null;
   server_id: string | null;
+  share_token: string | null;
   req_method: string;
   req_url: string;
   req_headers: Record<string, string> | null;

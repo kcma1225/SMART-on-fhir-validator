@@ -3,7 +3,7 @@
   const navItems = [
     ['dashboard', 'Dashboard', '/dashboard.html'],
     ['results', 'Results', '/results.html'],
-    ['validate', 'Validate', '/validate.html'],
+    ['validate', 'Inspect', '/validate.html'],
     ['rules', 'Rules', '/rules.html'],
     ['settings', 'Settings', '/settings.html'],
     ['test', 'Test', '/test.html'],
