@@ -40,10 +40,11 @@ export function check(conn: PrismConnection, flowStep: FlowStep, rules: RulesCon
 }
 
 function parseQueryParams(url: string): Record<string, string> {
+  const idx = url.indexOf('?');
+  if (idx === -1) return {};
   try {
-    const u = new URL(url);
     const result: Record<string, string> = {};
-    u.searchParams.forEach((v, k) => { result[k] = v; });
+    new URLSearchParams(url.slice(idx + 1)).forEach((v, k) => { result[k] = v; });
     return result;
   } catch {
     return {};

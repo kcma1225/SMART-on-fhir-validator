@@ -257,7 +257,7 @@
               ? `<a href="${escA(href)}" target="_blank" rel="noopener" class="text-blue-600 dark:text-blue-400 hover:underline">${esc(cid)}</a>`
               : `<span class="text-gray-500 dark:text-gray-400">${esc(cid)}</span>`}
             <button onclick="copyCid(event,'${escA(cid)}')" class="flex-shrink-0 p-0.5 rounded text-gray-400 hover:text-gray-600 dark:text-gray-500 dark:hover:text-gray-300 transition-colors" title="複製 Connection ID">${COPY_SVG}</button>
-            <a href="/validate.html?connectionId=${encodeURIComponent(cid)}" class="flex-shrink-0 p-0.5 rounded text-gray-400 hover:text-blue-500 dark:text-gray-500 dark:hover:text-blue-400 transition-colors" title="在 Inspect 頁面驗證">${INSPECT_SVG}</a>
+            <a href="/validate.html?connectionId=${encodeURIComponent(cid)}" target="_blank" rel="noopener" class="flex-shrink-0 p-0.5 rounded text-gray-400 hover:text-blue-500 dark:text-gray-500 dark:hover:text-blue-400 transition-colors" title="在 Inspect 頁面驗證">${INSPECT_SVG}</a>
           </div>
         </td>
         <td class="px-3 py-2 text-xs text-gray-700 dark:text-gray-300">${esc(r.serverName??'—')}</td>

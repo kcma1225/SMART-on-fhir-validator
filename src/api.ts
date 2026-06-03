@@ -334,6 +334,7 @@ app.post('/validate', { preHandler: requireAuth }, async (req, reply) => {
     connectionId: output.connectionId,
     shareToken: resolvedToken,
     flowStep: output.flowStep,
+    reqUrl: conn.req_url,
     results: output.results.map(r => ({
       field: r.field,
       location: r.location,

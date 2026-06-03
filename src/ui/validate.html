@@ -10,7 +10,7 @@
   <script src="/ui.js?v=2"></script>
 </head>
 <body class="bg-gray-100 dark:bg-gray-900 min-h-screen transition-colors duration-200">
-  <div id="tip" style="display:none;position:fixed;z-index:9999;pointer-events:none;max-width:320px"
+  <div id="tip" style="display:none;position:fixed;z-index:9999;pointer-events:none;max-width:600px;word-break:break-all"
     class="bg-gray-900 text-white text-xs rounded px-2.5 py-1.5 shadow-lg leading-relaxed"></div>
 
   <div data-app-nav="validate"></div>
@@ -80,6 +80,7 @@
           <div class="flex items-center gap-2">
             <span class="text-xs text-gray-500 dark:text-gray-400 w-28 flex-shrink-0">Flow Step</span>
             <div id="res-flow" class="font-mono text-sm font-semibold text-blue-700 dark:text-blue-400"></div>
+            <span id="req-url-tip-trigger" class="hidden flex-shrink-0 inline-flex items-center justify-center w-4 h-4 rounded-full bg-gray-200 dark:bg-gray-600 text-gray-600 dark:text-gray-300 text-xs font-bold cursor-default select-none">!</span>
           </div>
           <!-- Overall -->
           <div class="flex items-center gap-2">
@@ -259,8 +260,17 @@
         tokenRow.style.display = 'none';
       }
 
-      // Flow Step
+      // Flow Step + raw URL tooltip
       document.getElementById('res-flow').textContent = data.flowStep;
+      const urlTrigger = document.getElementById('req-url-tip-trigger');
+      if (data.reqUrl) {
+        urlTrigger.classList.remove('hidden');
+        urlTrigger.onmouseenter = e => { tipEl.textContent = data.reqUrl; tipEl.style.display = 'block'; moveTip(e); };
+        urlTrigger.onmousemove = moveTip;
+        urlTrigger.onmouseleave = () => { tipEl.style.display = 'none'; };
+      } else {
+        urlTrigger.classList.add('hidden');
+      }
 
       // Overall status
       const failCount = data.results.filter(r => r.status === 'FAIL').length;
