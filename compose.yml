@@ -21,6 +21,7 @@ services:
       - "3000"
     environment:
       PRISM_DATABASE_URL: ${PRISM_DATABASE_URL:-}
+      BASE_URL: ${BASE_URL:-}
       VALIDATOR_DATABASE_URL: postgresql://${VALIDATOR_DB_USER:-validator}:${VALIDATOR_DB_PASSWORD}@${VALIDATOR_DB_HOST:-postgres}:${VALIDATOR_DB_PORT:-5432}/${VALIDATOR_DB_NAME:-validator}?sslmode=disable
       ADMIN_USER: ${ADMIN_USER}
       ADMIN_PASS: ${ADMIN_PASS}

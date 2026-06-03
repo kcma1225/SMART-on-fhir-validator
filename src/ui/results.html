@@ -184,9 +184,9 @@
       } catch {}
     }
 
-    const SHARE_URL_PREFIX = 'https://twcat-gazelle.dicom.org.tw/prism/view/c/';
+    let SHARE_URL_PREFIX = '';
     function extractShareToken(raw) {
-      return raw.startsWith(SHARE_URL_PREFIX) ? raw.slice(SHARE_URL_PREFIX.length) : raw;
+      return SHARE_URL_PREFIX && raw.startsWith(SHARE_URL_PREFIX) ? raw.slice(SHARE_URL_PREFIX.length) : raw;
     }
 
     function buildParams(o) {
@@ -326,7 +326,7 @@
         apiFetch('/settings/base-url'),
         apiFetch('/settings/rules-updated-at'),
       ]);
-      if (buResult?.baseUrl) baseUrl = buResult.baseUrl;
+      if (buResult?.baseUrl) { baseUrl = buResult.baseUrl; SHARE_URL_PREFIX = baseUrl + '/view/c/'; }
       if (ruResult?.rulesUpdatedAt) rulesUpdatedAt = ruResult.rulesUpdatedAt;
       resetAndLoad();
     }

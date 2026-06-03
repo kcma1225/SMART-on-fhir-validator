@@ -42,6 +42,7 @@ async function ensureSettingsRow(): Promise<void> {
         data: {
           id: SETTINGS_ID,
           prismDatabaseUrl: process.env.PRISM_DATABASE_URL || null,
+          baseUrl: process.env.BASE_URL ? normalizeBaseUrl(process.env.BASE_URL) : null,
           pollingEnabled: DEFAULT_POLLING_ENABLED,
           pollingIntervalSeconds: DEFAULT_POLLING_INTERVAL_SECONDS,
           pollingBatchSize: DEFAULT_POLLING_BATCH_SIZE,
@@ -145,9 +146,10 @@ export async function getBaseUrl(): Promise<string | null> {
   await ensureSettingsRow();
   const prisma = getPrismaClient();
   const setting = await prisma.validatorSetting.findUnique({ where: { id: SETTINGS_ID } });
-  if (!setting?.baseUrl) return null;
+  const raw = setting?.baseUrl ?? process.env.BASE_URL ?? null;
+  if (!raw) return null;
   try {
-    return normalizeBaseUrl(setting.baseUrl);
+    return normalizeBaseUrl(raw);
   } catch {
     return null;
   }
