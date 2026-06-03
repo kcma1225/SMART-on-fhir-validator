@@ -122,6 +122,25 @@ export async function getPollingSettings(): Promise<PollingSettings> {
   };
 }
 
+export async function touchRulesUpdatedAt(): Promise<void> {
+  await ensureSettingsRow();
+  const prisma = getPrismaClient();
+  await Promise.all([
+    prisma.validatorSetting.update({
+      where: { id: SETTINGS_ID },
+      data: { rulesUpdatedAt: new Date() },
+    }),
+    prisma.processedConnection.deleteMany(),
+  ]);
+}
+
+export async function getRulesUpdatedAt(): Promise<string | null> {
+  await ensureSettingsRow();
+  const prisma = getPrismaClient();
+  const setting = await prisma.validatorSetting.findUnique({ where: { id: SETTINGS_ID } });
+  return setting?.rulesUpdatedAt?.toISOString() ?? null;
+}
+
 export async function getBaseUrl(): Promise<string | null> {
   await ensureSettingsRow();
   const prisma = getPrismaClient();

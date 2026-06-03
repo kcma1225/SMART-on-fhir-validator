@@ -4,7 +4,7 @@ import { getPrismaClient } from './db/validator';
 import { getConnectionById, getBackendServers, getConnectionIdByShareToken, testPrismDatabaseConnection } from './db/prism';
 import { validateAndSave } from './core';
 import { runTests } from './tester';
-import { startPoller, getPollerStatus } from './poller';
+import { startPoller, stopPoller, getPollerStatus } from './poller';
 import {
   getPollingSettings,
   getPrismDatabaseSettings,
@@ -12,6 +12,7 @@ import {
   saveVerifiedPrismDatabaseUrl,
   getBaseUrl,
   saveBaseUrl,
+  getRulesUpdatedAt,
 } from './settings';
 import {
   createRuleField,
@@ -33,6 +34,51 @@ app.addContentTypeParser('application/json', { parseAs: 'string' }, (_req, body,
 });
 
 const sessions = new Map<string, number>(); // token → createdAt ms
+
+const revalidateState = {
+  running: false,
+  progress: 0,
+  total: 0,
+  revalidated: 0,
+  failed: 0,
+  completedAt: null as string | null,
+};
+
+async function revalidateAllExisting(): Promise<void> {
+  if (revalidateState.running) return;
+  revalidateState.running = true;
+  revalidateState.progress = 0;
+  revalidateState.total = 0;
+  revalidateState.revalidated = 0;
+  revalidateState.failed = 0;
+  revalidateState.completedAt = null;
+  try {
+    stopPoller();
+    const prisma = getPrismaClient();
+    const distinct = await prisma.validationResult.findMany({
+      distinct: ['connectionId'],
+      select: { connectionId: true },
+    });
+    revalidateState.total = distinct.length;
+    for (const { connectionId } of distinct) {
+      try {
+        const conn = await getConnectionById(connectionId);
+        if (conn) {
+          await validateAndSave(conn);
+          revalidateState.revalidated++;
+        }
+      } catch (err) {
+        revalidateState.failed++;
+        console.error(`[revalidate] error on ${connectionId}:`, err);
+      }
+      revalidateState.progress++;
+    }
+  } finally {
+    revalidateState.running = false;
+    revalidateState.completedAt = new Date().toISOString();
+    await startPoller();
+  }
+}
 const SESSION_TTL_MS = 8 * 60 * 60 * 1000;
 
 const ADMIN_USER = process.env.ADMIN_USER ?? 'admin';
@@ -130,6 +176,18 @@ app.post('/settings/prism-db/test', { preHandler: requireAuth }, async (req, rep
     return reply.code(400).send({ error: message });
   }
 });
+
+app.get('/settings/rules-updated-at', { preHandler: requireAuth }, async () => ({ rulesUpdatedAt: await getRulesUpdatedAt() }));
+
+app.post('/revalidate', { preHandler: requireAuth }, async (_req, reply) => {
+  if (revalidateState.running) {
+    return reply.code(409).send({ error: 'Re-validation already in progress' });
+  }
+  revalidateAllExisting().catch(err => console.error('[revalidate] fatal:', err));
+  return { ok: true, message: 'Re-validation started' };
+});
+
+app.get('/revalidate/status', { preHandler: requireAuth }, async () => revalidateState);
 
 app.get('/settings/base-url', { preHandler: requireAuth }, async () => ({ baseUrl: await getBaseUrl() }));
 

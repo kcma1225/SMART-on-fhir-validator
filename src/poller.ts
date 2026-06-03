@@ -42,7 +42,7 @@ export async function getPollerStatus(): Promise<PollerStatusResponse> {
   };
 }
 
-async function runOnce(): Promise<void> {
+export async function runOnce(): Promise<void> {
   if (status.running) return;
   status.running = true;
 

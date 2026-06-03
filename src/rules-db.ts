@@ -1,4 +1,5 @@
 import { getPrismaClient } from './db/validator';
+import { touchRulesUpdatedAt } from './settings';
 import type { RulesConfig, FlowRule } from './types';
 
 let cachedRules: RulesConfig | null = null;
@@ -243,7 +244,7 @@ export async function createRuleField(input: RuleFieldInput): Promise<unknown> {
   if (!flow) throw new Error('flowStep not found');
 
   const field = await prisma.flowRuleField.create({ data });
-  await reloadRulesFromDb();
+  await Promise.all([reloadRulesFromDb(), touchRulesUpdatedAt()]);
   return field;
 }
 
@@ -254,23 +255,20 @@ export async function updateRuleField(id: string, input: RuleFieldInput): Promis
   if (!flow) throw new Error('flowStep not found');
 
   const field = await prisma.flowRuleField.update({ where: { id }, data });
-  await reloadRulesFromDb();
+  await Promise.all([reloadRulesFromDb(), touchRulesUpdatedAt()]);
   return field;
 }
 
 export async function deleteRuleField(id: string): Promise<void> {
   const prisma = getPrismaClient();
   await prisma.flowRuleField.delete({ where: { id } });
-  await reloadRulesFromDb();
+  await Promise.all([reloadRulesFromDb(), touchRulesUpdatedAt()]);
 }
 
 export async function updateFlowIdentifier(flowStep: string, input: FlowIdentifierInput): Promise<unknown> {
   const data = normalizeFlowIdentifierInput(input);
   const prisma = getPrismaClient();
-  const flow = await prisma.flowIdentifier.update({
-    where: { flowStep },
-    data,
-  });
-  await reloadRulesFromDb();
+  const flow = await prisma.flowIdentifier.update({ where: { flowStep }, data });
+  await Promise.all([reloadRulesFromDb(), touchRulesUpdatedAt()]);
   return flow;
 }

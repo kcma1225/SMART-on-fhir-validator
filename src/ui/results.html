@@ -16,7 +16,18 @@
   <div data-app-nav="results"></div>
 
   <div class="max-w-7xl mx-auto p-6">
-    <h2 class="text-2xl font-bold mb-4 dark:text-gray-100">驗證結果列表</h2>
+    <div class="flex items-center justify-between mb-4">
+      <h2 class="text-2xl font-bold dark:text-gray-100">驗證結果列表</h2>
+      <button onclick="startRevalidate()" id="revalidate-btn"
+        class="flex items-center gap-1.5 border border-amber-400 text-amber-600 dark:text-amber-400 dark:border-amber-500 px-4 py-2 rounded text-sm font-medium hover:bg-amber-50 dark:hover:bg-amber-900/20 transition disabled:opacity-50 disabled:cursor-not-allowed">
+        <svg xmlns="http://www.w3.org/2000/svg" class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>
+        立刻重驗
+      </button>
+    </div>
+    <div id="revalidate-progress" class="hidden mb-3 px-3 py-2 rounded-lg bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-700 text-sm text-amber-700 dark:text-amber-300 flex items-center gap-2">
+      <span id="rev-icon" class="flex-shrink-0"></span>
+      <span id="revalidate-msg"></span>
+    </div>
 
     <div class="bg-white dark:bg-gray-800 rounded-lg shadow p-4 mb-4">
       <div class="mb-3 pb-3 border-b border-gray-100 dark:border-gray-700">
@@ -151,7 +162,7 @@
       FAIL: 'bg-red-100 text-red-700 dark:bg-red-900/50 dark:text-red-300',
       SKIP: 'bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-400',
     };
-    let baseUrl = '', offset = 0, loading = false, exhausted = false, totalLoaded = 0, requestVersion = 0;
+    let baseUrl = '', rulesUpdatedAt = null, offset = 0, loading = false, exhausted = false, totalLoaded = 0, requestVersion = 0;
 
     const SECONDARY_FILTER_IDS = ['f-connection', 'f-server', 'f-flowstep', 'f-status', 'f-from', 'f-to'];
     let debounceTimer = null;
@@ -174,10 +185,15 @@
       } catch {}
     }
 
+    const SHARE_URL_PREFIX = 'https://twcat-gazelle.dicom.org.tw/prism/view/c/';
+    function extractShareToken(raw) {
+      return raw.startsWith(SHARE_URL_PREFIX) ? raw.slice(SHARE_URL_PREFIX.length) : raw;
+    }
+
     function buildParams(o) {
       const p = new URLSearchParams();
       const st = document.getElementById('f-sharetoken').value.trim();
-      if (st) { p.set('shareToken', st); } else {
+      if (st) { p.set('shareToken', extractShareToken(st)); } else {
         const conn = document.getElementById('f-connection').value.trim();
         const srv  = document.getElementById('f-server').value;
         const flow = document.getElementById('f-flowstep').value;
@@ -208,10 +224,14 @@
       return `<span data-tip="${escA(d)}" class="inline-flex items-center cursor-default">${icon}</span>`;
     }
 
+    const STALE_ICON = `<span data-tip="Rules 已更新，此筆結果使用舊版規則驗證" onmouseenter="showTip(event)" onmousemove="moveTip(event)" onmouseleave="hideTip()"
+      class="inline-flex items-center cursor-default ml-1 text-amber-500 dark:text-amber-400 select-none" style="font-size:11px">⚠</span>`;
+
     function rowHtml(r) {
       const cid = String(r.connectionId ?? '');
       const href = baseUrl ? `${baseUrl}/connections/${encodeURIComponent(cid)}` : '';
-      return `<tr class="hover:bg-gray-50 dark:hover:bg-gray-700">
+      const stale = rulesUpdatedAt && new Date(r.validatedAt) < new Date(rulesUpdatedAt);
+      return `<tr class="hover:bg-gray-50 dark:hover:bg-gray-700${stale ? ' opacity-75' : ''}">
         <td class="px-3 py-2 font-mono text-xs whitespace-nowrap">${href
           ? `<a href="${escA(href)}" target="_blank" rel="noopener" class="text-blue-600 dark:text-blue-400 hover:underline">${esc(cid)}</a>`
           : `<span class="text-gray-500 dark:text-gray-400">${esc(cid)}</span>`}</td>
@@ -222,7 +242,9 @@
         <td class="px-3 py-2 text-center text-gray-600 dark:text-gray-400">${r.required?'✓':''}</td>
         <td class="px-3 py-2 text-center"><span class="px-2 py-0.5 rounded text-xs font-medium ${STATUS_COLOR[r.status]||''}">${esc(r.status)}</span></td>
         <td class="px-3 py-2 text-center">${detailIcon(r.detail)}</td>
-        <td class="px-3 py-2 text-xs text-gray-400 dark:text-gray-500">${new Date(r.validatedAt).toLocaleString('zh-TW')}</td>
+        <td class="px-3 py-2 text-xs text-gray-400 dark:text-gray-500 whitespace-nowrap">
+          ${new Date(r.validatedAt).toLocaleString('zh-TW')}${stale ? STALE_ICON : ''}
+        </td>
       </tr>`;
     }
 
@@ -274,11 +296,62 @@
       .observe(document.getElementById('scroll-sentinel'));
 
     async function init() {
-      const [, r] = await Promise.all([loadServerOptions(), apiFetch('/settings/base-url')]);
-      if (r?.baseUrl) baseUrl = r.baseUrl;
+      const [, buResult, ruResult] = await Promise.all([
+        loadServerOptions(),
+        apiFetch('/settings/base-url'),
+        apiFetch('/settings/rules-updated-at'),
+      ]);
+      if (buResult?.baseUrl) baseUrl = buResult.baseUrl;
+      if (ruResult?.rulesUpdatedAt) rulesUpdatedAt = ruResult.rulesUpdatedAt;
       resetAndLoad();
     }
     init();
+
+    const REV_SPIN = `<svg class="animate-spin h-4 w-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"></path></svg>`;
+    const REV_CHECK = `<svg class="h-4 w-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7"/></svg>`;
+    let revalidatePollTimer = null;
+
+    function showRevProgress(msg, icon) {
+      document.getElementById('rev-icon').innerHTML = icon;
+      document.getElementById('revalidate-msg').textContent = msg;
+      document.getElementById('revalidate-progress').classList.remove('hidden');
+    }
+
+    async function startRevalidate() {
+      const btn = document.getElementById('revalidate-btn');
+      btn.disabled = true;
+      showRevProgress('重驗中…', REV_SPIN);
+      try {
+        const result = await apiFetch('/revalidate', { method: 'POST' });
+        if (!result) { btn.disabled = false; return; }
+        pollRevalidateStatus();
+      } catch (err) {
+        showRevProgress('重驗失敗：' + err.message, '⚠');
+        btn.disabled = false;
+      }
+    }
+
+    async function pollRevalidateStatus() {
+      clearTimeout(revalidatePollTimer);
+      try {
+        const s = await apiFetch('/revalidate/status');
+        if (!s) return;
+        if (s.running) {
+          showRevProgress(`重驗中… (${s.progress} / ${s.total})`, REV_SPIN);
+          revalidatePollTimer = setTimeout(pollRevalidateStatus, 1000);
+        } else if (s.completedAt) {
+          const failMsg = s.failed ? `，${s.failed} 筆失敗` : '';
+          showRevProgress(`✓ 完成：${s.revalidated} 筆重驗成功${failMsg}`, REV_CHECK);
+          document.getElementById('revalidate-btn').disabled = false;
+          setTimeout(() => document.getElementById('revalidate-progress').classList.add('hidden'), 6000);
+          const ruResult = await apiFetch('/settings/rules-updated-at');
+          if (ruResult?.rulesUpdatedAt) rulesUpdatedAt = ruResult.rulesUpdatedAt;
+          resetAndLoad();
+        }
+      } catch {
+        revalidatePollTimer = setTimeout(pollRevalidateStatus, 2000);
+      }
+    }
   </script>
 </body>
 </html>
