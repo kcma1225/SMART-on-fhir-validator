@@ -96,6 +96,12 @@ function normalizeHeaders(headers: Record<string, string> | null): Record<string
   return result;
 }
 
+function toValueString(raw: unknown): string {
+  if (raw === null || raw === undefined) return '';
+  if (typeof raw === 'object') return JSON.stringify(raw);
+  return String(raw);
+}
+
 function checkSimpleFields(
   data: Record<string, unknown>,
   def: CheckFields,
@@ -110,16 +116,18 @@ function checkSimpleFields(
       location,
       required: true,
       status: present ? 'PASS' : 'FAIL',
-      ...(present ? {} : { detail: `field not present in ${location.replace('_', ' ')}` }),
+      ...(present ? { value: toValueString(data[field]) } : { detail: `field not present in ${location.replace(/_/g, ' ')}` }),
     });
   }
 
   for (const field of [...(def.optional ?? []), ...(def.conditional ?? [])]) {
+    const present = field in data;
     results.push({
       field,
       location,
       required: false,
-      status: field in data ? 'PASS' : 'SKIP',
+      status: present ? 'PASS' : 'SKIP',
+      ...(present ? { value: toValueString(data[field]) } : {}),
     });
   }
 
@@ -130,7 +138,7 @@ function checkSimpleFields(
       location,
       required: false,
       status: present ? 'FAIL' : 'PASS',
-      ...(present ? { detail: `forbidden field present in ${location.replace(/_/g, ' ')}` } : {}),
+      ...(present ? { value: toValueString(data[field]), detail: `forbidden field present in ${location.replace(/_/g, ' ')}` } : {}),
     });
   }
 
@@ -166,30 +174,34 @@ function checkHeaderFields(
         location: 'headers',
         required: true,
         status: ok ? 'PASS' : 'FAIL',
+        value,
         ...(ok ? {} : { detail: `header present but does not match pattern ${pattern}` }),
       });
     } else {
-      results.push({ field, location: 'headers', required: true, status: 'PASS' });
+      results.push({ field, location: 'headers', required: true, status: 'PASS', value });
     }
   }
 
   for (const field of def.optional ?? []) {
+    const v = headers[field.toLowerCase()];
     results.push({
       field,
       location: 'headers',
       required: false,
-      status: headers[field.toLowerCase()] !== undefined ? 'PASS' : 'SKIP',
+      status: v !== undefined ? 'PASS' : 'SKIP',
+      ...(v !== undefined ? { value: v } : {}),
     });
   }
 
   for (const field of def.forbidden ?? []) {
-    const present = headers[field.toLowerCase()] !== undefined;
+    const v = headers[field.toLowerCase()];
+    const present = v !== undefined;
     results.push({
       field,
       location: 'headers',
       required: false,
       status: present ? 'FAIL' : 'PASS',
-      ...(present ? { detail: 'forbidden header present in request' } : {}),
+      ...(present ? { value: v, detail: 'forbidden header present in request' } : {}),
     });
   }
 

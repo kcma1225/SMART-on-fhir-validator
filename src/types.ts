@@ -22,6 +22,7 @@ export interface FieldResult {
   required: boolean;
   status: FieldStatus;
   detail?: string;
+  value?: string; // undefined = field absent; "" = key present but empty
 }
 
 export interface ValidationOutput {

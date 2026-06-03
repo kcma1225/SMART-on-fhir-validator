@@ -340,7 +340,8 @@ app.post('/validate', { preHandler: requireAuth }, async (req, reply) => {
       location: r.location,
       required: r.required,
       status: r.status,
-      ...(r.detail ? { detail: r.detail } : {}),
+      ...(r.detail !== undefined ? { detail: r.detail } : {}),
+      ...(r.value !== undefined ? { value: r.value } : {}),
     })),
   };
 });

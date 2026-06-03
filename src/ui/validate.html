@@ -91,14 +91,14 @@
       </div>
 
       <div class="bg-white dark:bg-gray-800 rounded-lg shadow overflow-auto">
-        <table class="w-full text-sm">
+        <table class="min-w-full text-sm">
           <thead class="bg-gray-50 dark:bg-gray-700 text-gray-600 dark:text-gray-300 text-xs uppercase">
             <tr>
               <th class="px-3 py-2 text-left">Field</th>
               <th class="px-3 py-2 text-left">Location</th>
-              <th class="px-3 py-2 text-center">Required</th>
+              <th class="px-3 py-2 text-center">Req</th>
               <th class="px-3 py-2 text-center">Status</th>
-              <th class="px-3 py-2 text-left">Detail</th>
+              <th class="px-3 py-2 text-left w-96">Value</th>
             </tr>
           </thead>
           <tbody id="res-body" class="divide-y divide-gray-100 dark:divide-gray-700"></tbody>
@@ -151,6 +151,35 @@
     async function copyField(textElId, btnId) {
       const text = document.getElementById(textElId).textContent.trim();
       const btn = document.getElementById(btnId);
+      try {
+        if (navigator.clipboard) {
+          await navigator.clipboard.writeText(text);
+        } else {
+          const ta = document.createElement('textarea');
+          ta.value = text; ta.style.cssText = 'position:fixed;opacity:0';
+          document.body.appendChild(ta); ta.select(); document.execCommand('copy');
+          document.body.removeChild(ta);
+        }
+      } catch {}
+      btn.innerHTML = CHECK_SVG;
+      setTimeout(() => { btn.innerHTML = COPY_SVG; }, 1500);
+    }
+
+    const DETAIL_ICONS = {
+      field:   `<svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4 text-red-500 dark:text-red-400" style="pointer-events:none" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><rect x="3" y="5" width="18" height="14" rx="2" fill="none"/><line x1="9" y1="12" x2="15" y2="12"/></svg>`,
+      header:  `<svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4 text-blue-500 dark:text-blue-400" style="pointer-events:none" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M7 7h10M7 11h6m-9 8h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"/><line x1="16" y1="14" x2="20" y2="18" stroke-linecap="round"/><line x1="20" y1="14" x2="16" y2="18" stroke-linecap="round"/></svg>`,
+      pattern: `<svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4 text-purple-500 dark:text-purple-400" style="pointer-events:none" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><line x1="16.5" y1="16.5" x2="21" y2="21" stroke-linecap="round"/><line x1="8" y1="11" x2="14" y2="11" stroke-linecap="round"/><line x1="11" y1="8" x2="11" y2="14" stroke-linecap="round"/></svg>`,
+    };
+    function detailIcon(d) {
+      if (!d) return '';
+      const icon = d.startsWith('header present but does not match') ? DETAIL_ICONS.pattern
+                 : d.startsWith('header not present') ? DETAIL_ICONS.header
+                 : DETAIL_ICONS.field;
+      return `<span data-tip="${escapeAttr(d)}" class="inline-flex items-center cursor-default flex-shrink-0">${icon}</span>`;
+    }
+
+    async function copyValueBtn(btn) {
+      const text = btn.dataset.copy ?? '';
       try {
         if (navigator.clipboard) {
           await navigator.clipboard.writeText(text);
@@ -289,14 +318,34 @@
       if (data.results.length === 0) {
         tbody.innerHTML = '<tr><td colspan="5" class="px-3 py-4 text-center text-gray-400 dark:text-gray-500">無欄位結果（unknown flow）</td></tr>';
       } else {
-        tbody.innerHTML = data.results.map(r => `
+        tbody.innerHTML = data.results.map(r => {
+          // Status + detail icon
+          const statusCell = `<div class="flex items-center gap-1">
+            <span class="flex-shrink-0 px-2 py-0.5 rounded text-xs font-medium ${STATUS_COLOR[r.status] || ''}">${escapeHtml(r.status)}</span>
+            ${detailIcon(r.detail)}
+          </div>`;
+
+          // Value cell
+          let valueInner = '';
+          if (r.value === undefined) {
+            valueInner = '<span class="text-gray-300 dark:text-gray-600 text-xs">—</span>';
+          } else if (r.value === '') {
+            valueInner = '<span class="text-red-500 dark:text-red-400 font-mono text-xs font-semibold italic">[Empty]</span>';
+          } else {
+            valueInner = `<button onclick="copyValueBtn(this)" data-copy="${escapeAttr(r.value)}"
+                class="flex-shrink-0 p-0.5 rounded text-gray-400 hover:text-gray-600 dark:text-gray-500 dark:hover:text-gray-300 transition-colors mt-0.5" title="複製">${COPY_SVG}</button>
+              <span class="font-mono text-xs text-gray-700 dark:text-gray-300 whitespace-nowrap">${escapeHtml(r.value)}</span>`;
+          }
+
+          return `
           <tr class="hover:bg-gray-50 dark:hover:bg-gray-700">
             <td class="px-3 py-2 font-mono font-semibold text-sm dark:text-gray-200">${escapeHtml(r.field)}</td>
-            <td class="px-3 py-2 text-xs text-gray-500 dark:text-gray-400">${escapeHtml(r.location)}</td>
+            <td class="px-3 py-2 text-xs text-gray-500 dark:text-gray-400 whitespace-nowrap">${escapeHtml(r.location)}</td>
             <td class="px-3 py-2 text-center text-gray-600 dark:text-gray-400">${r.required ? '✓' : ''}</td>
-            <td class="px-3 py-2 text-center"><span class="px-2 py-0.5 rounded text-xs font-medium ${STATUS_COLOR[r.status] || ''}">${escapeHtml(r.status)}</span></td>
-            <td class="px-3 py-2 text-xs text-gray-500 dark:text-gray-400">${escapeHtml(r.detail ?? '')}</td>
-          </tr>`).join('');
+            <td class="px-3 py-2 whitespace-nowrap">${statusCell}</td>
+            <td class="px-3 py-2"><div class="flex items-center gap-1.5">${valueInner}</div></td>
+          </tr>`;
+        }).join('');
       }
 
       document.getElementById('result-section').classList.remove('hidden');
@@ -321,6 +370,16 @@
         doValidate();
       }
     }
+
+    document.getElementById('res-body').addEventListener('mouseover', e => {
+      const s = e.target.closest('[data-tip]'); if (s) { tipEl.textContent = s.dataset.tip; tipEl.style.display = 'block'; }
+    });
+    document.getElementById('res-body').addEventListener('mousemove', e => {
+      if (tipEl.style.display === 'none' || !e.target.closest('[data-tip]')) return; moveTip(e);
+    });
+    document.getElementById('res-body').addEventListener('mouseout', e => {
+      if (e.target.closest('[data-tip]')) tipEl.style.display = 'none';
+    });
 
     document.getElementById('share-token').addEventListener('input', onShareInput);
     document.getElementById('conn-id').addEventListener('input', scheduleValidate);
