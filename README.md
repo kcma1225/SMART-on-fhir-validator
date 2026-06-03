@@ -1,18 +1,22 @@
-# SMART on FHIR Validator
+# SMART on FHIR / IUA Validator
 
-A lightweight validator for SMART on FHIR / IUA traffic captured by a Prism proxy.
+A field-validation service for SMART on FHIR / IUA traffic captured by a Prism proxy.
 
-The service reads Prism `connections` records, classifies each request into a SMART/FHIR flow, checks configured fields, and stores validation results in its own PostgreSQL database. Rules, Prism database connection settings, and polling settings are managed from the web UI.
+Reads Prism `connections` records, classifies each request into a SMART/FHIR flow step, checks configured fields, and stores results in its own PostgreSQL database. Rules, Prism DB connection, polling settings, and base URL are all managed from the web UI.
 
 ## Features
 
-- Fastify backend with static admin UI
-- Docker Compose deployment with Nginx, validator API, and PostgreSQL
-- Prism database connection test before polling starts
-- Editable validation rules stored in the validator database
-- Editable flow endpoint paths for different OAuth/FHIR deployments
-- On-demand validation by connection ID
-- Polling dashboard, results list, and fixture-based test page
+- Fastify backend with static admin UI (dark/light mode, persisted in localStorage)
+- Docker Compose deployment: Nginx + validator API + PostgreSQL
+- All ports and DB credentials configurable via `.env`
+- Editable validation rules stored in the validator database (no YAML files)
+- Four field types: `required`, `conditional`, `optional`, `forbidden` (blacklist)
+- Flow endpoint patterns editable per deployment
+- On-demand **Connection Inspect** page: validate by Connection ID or Share Token, shows per-field values with copy buttons and horizontal scroll
+- Re-validation: manually trigger re-validation of all existing results against current rules
+- Stale result indicator (⚠) when results pre-date the last rule change
+- ShareToken filter with automatic URL prefix stripping
+- Polling dashboard, filterable results list, and fixture-based test page
 
 ## Requirements
 
@@ -21,74 +25,76 @@ The service reads Prism `connections` records, classifies each request into a SM
 
 ## Configuration
 
-Create a local `.env` from the example:
+Copy `.env.example` to `.env` and fill in required values:
 
 ```bash
 cp .env.example .env
 ```
 
-Set at least:
+| Variable | Default | Notes |
+|---|---|---|
+| `PRISM_DATABASE_URL` | — | **Required.** Prism DB read-only connection URL |
+| `VALIDATOR_DB_PASSWORD` | — | **Required.** Validator postgres password |
+| `VALIDATOR_DB_HOST` | `postgres` | Postgres hostname (Docker service name) |
+| `VALIDATOR_DB_PORT` | `5432` | Postgres port; sets `PGPORT` inside the container |
+| `VALIDATOR_DB_USER` | `validator` | Postgres username |
+| `VALIDATOR_DB_NAME` | `validator` | Postgres database name |
+| `FRONTEND_PORT` | `80` | Host port mapped to nginx |
+| `API_PORT` | `3000` | Fastify listen port; substituted into nginx.conf at startup |
+| `ADMIN_USER` | `admin` | UI login username |
+| `ADMIN_PASS` | `admin123` | UI login password |
+| `BASE_URL` | — | Prism web base URL (e.g. `https://host/prism`); used for Connection ID / Share Token hyperlinks |
 
-```env
-VALIDATOR_DB_PASSWORD=change_me
-ADMIN_USER=admin
-ADMIN_PASS=admin123
-API_PORT=3000
-```
+`VALIDATOR_DATABASE_URL` is assembled automatically in `compose.yml` from the `VALIDATOR_DB_*` vars. Do not set it manually.
 
-`PRISM_DATABASE_URL` can be set in `.env` as an initial value, but the recommended setup is to configure and test the Prism database from the Settings page.
+`BASE_URL` seeds the database on first startup and can also be overridden at any time from the Settings page.
 
 ## Run
 
 ```bash
-docker compose -f compose.yml up -d --build
+docker compose up -d --build
 ```
 
-Open the UI:
+Open the UI at `http://localhost/` (or the configured `FRONTEND_PORT`).
 
-```text
-http://localhost/
-```
-
-Default pages:
-
-- `/dashboard.html` polling status and daily stats
-- `/settings.html` Prism DB and polling settings
-- `/rules.html` editable flow endpoints and field validation rules
-- `/validate.html` on-demand validation
-- `/results.html` stored validation results
-- `/test.html` fixture checks
+| Page | Path | Description |
+|---|---|---|
+| Dashboard | `/dashboard.html` | Polling status and daily PASS/FAIL counts |
+| Results | `/results.html` | Filterable results table with infinite scroll |
+| Inspect | `/validate.html` | On-demand validate by Connection ID or Share Token |
+| Rules | `/rules.html` | Edit flow identifiers and field rules |
+| Settings | `/settings.html` | Prism DB, polling config, base URL |
+| Test | `/test.html` | Fixture-based test runner |
 
 ## Development
 
-Install dependencies:
-
 ```bash
 npm install
+npm run dev       # hot-reload backend
+npm run build     # compile TypeScript + (optional) Vite
 ```
 
-Run the backend locally:
+Push the Prisma schema:
 
 ```bash
-npm run dev
+VALIDATOR_DATABASE_URL="postgresql://validator:password@localhost:5432/validator?sslmode=disable" \
+  npx prisma db push --schema=prisma/schema.prisma
 ```
 
-Build:
+## Field Type Reference
 
-```bash
-npm run build
-```
+| Type | Field present | Field absent |
+|---|---|---|
+| `required` | PASS | FAIL |
+| `conditional` | PASS | SKIP |
+| `optional` | PASS | SKIP |
+| `forbidden` | **FAIL** | PASS |
 
-Push the Prisma schema to the validator database:
-
-```bash
-npm run db:push
-```
+`forbidden` is a blacklist type — the field must **not** appear in the request/response.
 
 ## Notes
 
-- Rules are stored in database tables, not in a YAML file.
-- `required` fields fail when missing.
-- `conditional` and `optional` fields are recorded as `SKIP` when missing.
-- Extra request parameters or body fields do not fail validation.
-- Parameter order does not affect validation.
+- Rules changes automatically clear `processed_connections`, causing the poller to re-validate all recent connections on the next tick.
+- The Inspect page opens in a new tab when launched from the Results list.
+- `nginx.conf` is a template; `${API_PORT}` is substituted by `envsubst` at nginx startup. Only `$API_PORT` is substituted — nginx's own `$host`, `$uri` etc. are preserved.
+- Query params are parsed directly from the URL's `?` position using `URLSearchParams`, so both absolute and relative `req_url` formats are supported.
