@@ -96,6 +96,24 @@ export async function getPollingSettings(): Promise<PollingSettings> {
   };
 }
 
+export async function getBaseUrl(): Promise<string | null> {
+  await ensureSettingsRow();
+  const prisma = getPrismaClient();
+  const setting = await prisma.validatorSetting.findUnique({ where: { id: SETTINGS_ID } });
+  return setting?.baseUrl ?? null;
+}
+
+export async function saveBaseUrl(url: string): Promise<string | null> {
+  await ensureSettingsRow();
+  const prisma = getPrismaClient();
+  const trimmed = url.trim().replace(/\/$/, '');
+  const setting = await prisma.validatorSetting.update({
+    where: { id: SETTINGS_ID },
+    data: { baseUrl: trimmed || null },
+  });
+  return setting.baseUrl;
+}
+
 export async function savePollingSettings(input: {
   enabled: boolean;
   intervalSeconds: number;

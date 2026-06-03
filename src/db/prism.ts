@@ -30,8 +30,8 @@ export async function getRecentConnections(limit: number): Promise<PrismConnecti
   const { rows } = await db.query<PrismConnection>(
     `SELECT
        id::text        AS id,
-       institution_id,
        user_id,
+       server_id::text AS server_id,
        req_method,
        req_url,
        req_headers,
@@ -53,8 +53,8 @@ export async function getConnectionById(id: string): Promise<PrismConnection | n
   const { rows } = await db.query<PrismConnection>(
     `SELECT
        id::text        AS id,
-       institution_id,
        user_id,
+       server_id::text AS server_id,
        req_method,
        req_url,
        req_headers,
@@ -65,4 +65,33 @@ export async function getConnectionById(id: string): Promise<PrismConnection | n
     [id],
   );
   return rows[0] ?? null;
+}
+
+export async function getConnectionIdByShareToken(shareToken: string): Promise<string | null> {
+  const db = await getPool();
+  const { rows } = await db.query<{ id: string }>(
+    `SELECT id::text AS id FROM connections WHERE share_token = $1 LIMIT 1`,
+    [shareToken],
+  );
+  return rows[0]?.id ?? null;
+}
+
+export async function getBackendServers(): Promise<{ id: string; name: string }[]> {
+  const db = await getPool();
+  const { rows } = await db.query<{ id: string; name: string }>(
+    `SELECT id::text AS id, name FROM backend_servers ORDER BY name`,
+  );
+  return rows;
+}
+
+let serverNameCache: Map<string, string> | null = null;
+let serverNameCacheAt = 0;
+
+export async function getServerName(serverId: string): Promise<string | null> {
+  if (!serverNameCache || Date.now() - serverNameCacheAt > 60_000) {
+    const servers = await getBackendServers();
+    serverNameCache = new Map(servers.map(s => [s.id, s.name]));
+    serverNameCacheAt = Date.now();
+  }
+  return serverNameCache.get(serverId) ?? null;
 }

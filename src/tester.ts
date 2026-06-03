@@ -6,7 +6,6 @@ import { getCachedRules } from './rules-db';
 import type { PrismConnection, FieldStatus } from './types';
 
 interface FixtureInput {
-  institution_id: number;
   req_method: string;
   req_url: string;
   req_headers: Record<string, string>;
@@ -61,8 +60,8 @@ export function runTests(): TestReport {
   const cases: CaseResult[] = fixtures.map(fixture => {
     const conn: PrismConnection = {
       id: fixture.id,
-      institution_id: fixture.input.institution_id ?? null,
       user_id: null,
+      server_id: null,
       req_method: fixture.input.req_method,
       req_url: fixture.input.req_url,
       req_headers: fixture.input.req_headers,

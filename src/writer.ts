@@ -16,8 +16,9 @@ export async function saveResults(output: ValidationOutput): Promise<void> {
     await prisma.validationResult.createMany({
       data: output.results.map(r => ({
         connectionId: output.connectionId,
-        institutionId: output.institutionId ?? null,
         userId: output.userId ?? null,
+        serverId: output.serverId ?? null,
+        serverName: output.serverName ?? null,
         flowStep: output.flowStep,
         fieldLocation: r.location,
         fieldName: r.field,

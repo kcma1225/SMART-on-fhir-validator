@@ -10,8 +10,9 @@ datasource db {
 model ValidationResult {
   id            String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   connectionId  String   @map("connection_id")
-  institutionId Int?     @map("institution_id")
   userId        Int?     @map("user_id")
+  serverId      String?  @map("server_id")
+  serverName    String?  @map("server_name")
   flowStep      String   @map("flow_step")
   fieldLocation String   @map("field_location")
   fieldName     String   @map("field_name")
@@ -21,7 +22,7 @@ model ValidationResult {
   validatedAt   DateTime @default(now()) @map("validated_at")
 
   @@index([connectionId])
-  @@index([institutionId])
+  @@index([serverId])
   @@index([flowStep])
   @@index([status])
   @@map("validation_results")
@@ -72,6 +73,7 @@ model ValidatorSetting {
   pollingEnabled             Boolean   @default(true) @map("polling_enabled")
   pollingIntervalSeconds     Int       @default(30) @map("polling_interval_seconds")
   pollingBatchSize           Int       @default(100) @map("polling_batch_size")
+  baseUrl                    String?   @map("base_url")
   updatedAt                  DateTime  @updatedAt @map("updated_at")
 
   @@map("validator_settings")

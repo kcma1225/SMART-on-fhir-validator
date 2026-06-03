@@ -50,6 +50,26 @@
       <p id="message" class="text-sm mt-3 hidden"></p>
     </div>
 
+    <div class="bg-white rounded-lg shadow p-5 mb-5">
+      <div class="mb-4">
+        <h3 class="font-semibold text-lg">Prism Base URL</h3>
+        <p class="text-sm text-gray-500 mt-1">設定 Prism 系統的網址，Results 頁面的 Connection ID 將連結至 <code class="bg-gray-100 px-1 rounded">{baseUrl}/connections/{id}</code>。</p>
+      </div>
+
+      <label class="block text-sm font-medium text-gray-700 mb-2">Base URL</label>
+      <input type="text" id="base-url" autocomplete="off" spellcheck="false"
+        placeholder="https://prism.example.com"
+        class="w-full border rounded px-3 py-2 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-blue-500">
+
+      <div class="flex items-center gap-3 mt-4">
+        <button onclick="saveBaseUrl()" id="base-url-btn"
+          class="bg-blue-600 text-white px-5 py-2 rounded text-sm font-medium hover:bg-blue-700 transition">
+          儲存
+        </button>
+      </div>
+      <p id="base-url-message" class="text-sm mt-3 hidden"></p>
+    </div>
+
     <div class="bg-white rounded-lg shadow p-5">
       <div class="mb-4">
         <h3 class="font-semibold text-lg">Polling</h3>
@@ -136,10 +156,17 @@
       input.type = input.type === 'password' ? 'text' : 'password';
     }
 
+    function setBaseUrlMessage(text, ok) {
+      const el = document.getElementById('base-url-message');
+      el.textContent = text;
+      el.className = `text-sm mt-3 ${ok ? 'text-green-700' : 'text-red-600'}`;
+    }
+
     async function loadSettings() {
-      const [databaseResult, pollingResult] = await Promise.all([
+      const [databaseResult, pollingResult, baseUrlResult] = await Promise.all([
         apiFetch('/settings/prism-db'),
         apiFetch('/settings/polling'),
+        apiFetch('/settings/base-url'),
       ]);
 
       if (databaseResult) {
@@ -153,6 +180,33 @@
         document.getElementById('polling-interval').value = pollingResult.data.intervalSeconds;
         document.getElementById('polling-batch').value = pollingResult.data.batchSize;
       }
+
+      if (baseUrlResult) {
+        document.getElementById('base-url').value = baseUrlResult.data.baseUrl ?? '';
+      }
+    }
+
+    async function saveBaseUrl() {
+      const btn = document.getElementById('base-url-btn');
+      btn.disabled = true;
+      btn.textContent = '儲存中...';
+
+      const result = await apiFetch('/settings/base-url', {
+        method: 'PUT',
+        body: JSON.stringify({ baseUrl: document.getElementById('base-url').value }),
+      });
+
+      btn.disabled = false;
+      btn.textContent = '儲存';
+      if (!result) return;
+
+      if (!result.ok) {
+        setBaseUrlMessage(result.data?.error ?? '儲存失敗。', false);
+        return;
+      }
+
+      document.getElementById('base-url').value = result.data.baseUrl ?? '';
+      setBaseUrlMessage('Base URL 已儲存。', true);
     }
 
     async function testAndSave() {

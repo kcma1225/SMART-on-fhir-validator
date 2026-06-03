@@ -1,7 +1,7 @@
 import Fastify from 'fastify';
 import * as crypto from 'crypto';
 import { getPrismaClient } from './db/validator';
-import { getConnectionById, testPrismDatabaseConnection } from './db/prism';
+import { getConnectionById, getBackendServers, getConnectionIdByShareToken, testPrismDatabaseConnection } from './db/prism';
 import { validateAndSave } from './core';
 import { runTests } from './tester';
 import { startPoller, getPollerStatus } from './poller';
@@ -10,6 +10,8 @@ import {
   getPrismDatabaseSettings,
   savePollingSettings,
   saveVerifiedPrismDatabaseUrl,
+  getBaseUrl,
+  saveBaseUrl,
 } from './settings';
 import {
   createRuleField,
@@ -113,6 +115,19 @@ app.post('/settings/prism-db/test', { preHandler: requireAuth }, async (req, rep
     };
   } catch (err) {
     const message = err instanceof Error ? err.message : 'Connection failed';
+    return reply.code(400).send({ error: message });
+  }
+});
+
+app.get('/settings/base-url', { preHandler: requireAuth }, async () => ({ baseUrl: await getBaseUrl() }));
+
+app.put('/settings/base-url', { preHandler: requireAuth }, async (req, reply) => {
+  const { baseUrl } = req.body as { baseUrl?: string };
+  try {
+    const saved = await saveBaseUrl(baseUrl ?? '');
+    return { ok: true, baseUrl: saved };
+  } catch (err) {
+    const message = err instanceof Error ? err.message : 'Unable to save base URL';
     return reply.code(400).send({ error: message });
   }
 });
@@ -245,11 +260,23 @@ app.post('/validate', { preHandler: requireAuth }, async (req, reply) => {
   };
 });
 
+// ── Prism servers (for filter dropdown) ──────────────────────────────────────
+
+app.get('/prism/servers', { preHandler: requireAuth }, async (_req, reply) => {
+  try {
+    return await getBackendServers();
+  } catch {
+    return reply.code(503).send({ error: 'Prism database unavailable' });
+  }
+});
+
 // ── Results ───────────────────────────────────────────────────────────────────
 
 app.get('/results', { preHandler: requireAuth }, async (req) => {
   const {
-    institutionId,
+    shareToken,
+    connectionId,
+    serverId,
     flowStep,
     status,
     from,
@@ -259,9 +286,22 @@ app.get('/results', { preHandler: requireAuth }, async (req) => {
   } = req.query as Record<string, string>;
 
   const prisma = getPrismaClient();
+
+  if (shareToken) {
+    const resolvedId = await getConnectionIdByShareToken(shareToken).catch(() => null);
+    if (!resolvedId) return [];
+    return prisma.validationResult.findMany({
+      where: { connectionId: resolvedId },
+      orderBy: { validatedAt: 'desc' },
+      take: Math.min(Number(limit), 1000),
+      skip: Number(offset),
+    });
+  }
+
   return prisma.validationResult.findMany({
     where: {
-      ...(institutionId ? { institutionId: Number(institutionId) } : {}),
+      ...(connectionId ? { connectionId: { contains: connectionId } } : {}),
+      ...(serverId ? { serverId } : {}),
       ...(flowStep ? { flowStep } : {}),
       ...(status ? { status } : {}),
       ...((from ?? to) ? {

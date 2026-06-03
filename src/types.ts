@@ -6,8 +6,8 @@ export type FieldLocation = 'query_params' | 'body_params' | 'headers' | 'respon
 
 export interface PrismConnection {
   id: string;
-  institution_id: number | null;
   user_id: number | null;
+  server_id: string | null;
   req_method: string;
   req_url: string;
   req_headers: Record<string, string> | null;
@@ -25,8 +25,9 @@ export interface FieldResult {
 
 export interface ValidationOutput {
   connectionId: string;
-  institutionId: number | null;
   userId: number | null;
+  serverId: string | null;
+  serverName: string | null;
   flowStep: FlowStep;
   results: FieldResult[];
 }
