@@ -122,6 +122,17 @@ function checkSimpleFields(
     });
   }
 
+  for (const field of def.forbidden ?? []) {
+    const present = field in data;
+    results.push({
+      field,
+      location,
+      required: false,
+      status: present ? 'FAIL' : 'PASS',
+      ...(present ? { detail: `forbidden field present in ${location.replace(/_/g, ' ')}` } : {}),
+    });
+  }
+
   return results;
 }
 
@@ -167,6 +178,17 @@ function checkHeaderFields(
       location: 'headers',
       required: false,
       status: headers[field.toLowerCase()] !== undefined ? 'PASS' : 'SKIP',
+    });
+  }
+
+  for (const field of def.forbidden ?? []) {
+    const present = headers[field.toLowerCase()] !== undefined;
+    results.push({
+      field,
+      location: 'headers',
+      required: false,
+      status: present ? 'FAIL' : 'PASS',
+      ...(present ? { detail: 'forbidden header present in request' } : {}),
     });
   }
 

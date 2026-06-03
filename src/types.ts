@@ -37,6 +37,7 @@ export interface CheckFields {
   required?: string[];
   optional?: string[];
   conditional?: string[];
+  forbidden?: string[];
   patterns?: Record<string, string>;
 }
 

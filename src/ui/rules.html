@@ -28,9 +28,13 @@
               <div class="font-semibold text-amber-700 dark:text-amber-400">conditional</div>
               <p class="text-gray-600 dark:text-gray-400 mt-1">目前當 optional：有就 PASS，沒有 SKIP，不會 FAIL。</p>
             </div>
-            <div>
+            <div class="mb-3">
               <div class="font-semibold text-gray-700 dark:text-gray-300">optional</div>
               <p class="text-gray-600 dark:text-gray-400 mt-1">欄位不存在記錄 SKIP；有就 PASS，不影響通過與否。</p>
+            </div>
+            <div>
+              <div class="font-semibold text-purple-700 dark:text-purple-400">forbidden</div>
+              <p class="text-gray-600 dark:text-gray-400 mt-1">黑名單欄位。欄位<strong>存在</strong>直接 FAIL；不存在則 PASS。</p>
             </div>
           </div>
         </div>
@@ -65,6 +69,7 @@
             <option value="required">required</option>
             <option value="conditional">conditional</option>
             <option value="optional">optional</option>
+            <option value="forbidden">forbidden</option>
           </select>
         </div>
       </div>
@@ -87,7 +92,7 @@
                 <p><span class="font-semibold text-gray-800 dark:text-gray-200">Flow</span>：這個欄位屬於哪個驗證流程。範例：<span class="font-mono">authorization_request</span></p>
                 <p><span class="font-semibold text-gray-800 dark:text-gray-200">Field Name</span>：要檢查的欄位名稱。範例：<span class="font-mono">client_id</span></p>
                 <p><span class="font-semibold text-gray-800 dark:text-gray-200">Location</span>：欄位所在位置。範例：<span class="font-mono">query_params</span>、<span class="font-mono">body_params</span>、<span class="font-mono">headers</span>、<span class="font-mono">response_body</span></p>
-                <p><span class="font-semibold text-gray-800 dark:text-gray-200">Type</span>：檢查類型。範例：<span class="font-mono">required</span> 缺少會 FAIL；<span class="font-mono">conditional</span> / <span class="font-mono">optional</span> 缺少會 SKIP。</p>
+                <p><span class="font-semibold text-gray-800 dark:text-gray-200">Type</span>：檢查類型。<span class="font-mono">required</span> 缺少 FAIL；<span class="font-mono">conditional</span> / <span class="font-mono">optional</span> 缺少 SKIP；<span class="font-mono">forbidden</span> 存在即 FAIL（黑名單）。</p>
                 <p><span class="font-semibold text-gray-800 dark:text-gray-200">Pattern</span>：可選的正規表示式，用來檢查值格式。範例：<span class="font-mono">^Bearer .+</span></p>
                 <p><span class="font-semibold text-gray-800 dark:text-gray-200">Sort</span>：同一 flow 裡的顯示排序，數字越小越前面。範例：<span class="font-mono">0</span>、<span class="font-mono">10</span></p>
               </div>
@@ -121,6 +126,7 @@
             <option value="required">required</option>
             <option value="conditional">conditional</option>
             <option value="optional">optional</option>
+            <option value="forbidden">forbidden</option>
           </select>
         </div>
         <div>
@@ -197,7 +203,7 @@
     }
 
     function badge(type) {
-      const colors = { required: 'bg-red-100 text-red-700 dark:bg-red-900/50 dark:text-red-300', conditional: 'bg-amber-100 text-amber-700 dark:bg-amber-900/50 dark:text-amber-300', optional: 'bg-gray-100 text-gray-700 dark:bg-gray-700 dark:text-gray-300' };
+      const colors = { required: 'bg-red-100 text-red-700 dark:bg-red-900/50 dark:text-red-300', conditional: 'bg-amber-100 text-amber-700 dark:bg-amber-900/50 dark:text-amber-300', optional: 'bg-gray-100 text-gray-700 dark:bg-gray-700 dark:text-gray-300', forbidden: 'bg-purple-100 text-purple-800 dark:bg-purple-900/50 dark:text-purple-300' };
       return `<span class="px-2 py-0.5 rounded text-xs font-medium ${colors[type]||''}">${escapeHtml(type)}</span>`;
     }
 

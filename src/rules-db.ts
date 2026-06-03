@@ -5,7 +5,7 @@ import type { RulesConfig, FlowRule } from './types';
 let cachedRules: RulesConfig | null = null;
 
 const FIELD_LOCATIONS = ['query_params', 'body_params', 'headers', 'response_body'];
-const FIELD_TYPES = ['required', 'conditional', 'optional'];
+const FIELD_TYPES = ['required', 'conditional', 'optional', 'forbidden'];
 const FLOW_ORDER = [
   'smart_metadata',
   'authorization_request',
@@ -144,6 +144,7 @@ async function buildRulesConfig(): Promise<RulesConfig> {
       const required    = locFields.filter(f => f.fieldType === 'required').map(f => f.fieldName);
       const conditional = locFields.filter(f => f.fieldType === 'conditional').map(f => f.fieldName);
       const optional    = locFields.filter(f => f.fieldType === 'optional').map(f => f.fieldName);
+      const forbidden   = locFields.filter(f => f.fieldType === 'forbidden').map(f => f.fieldName);
       const patterns: Record<string, string> = {};
       for (const f of locFields) {
         if (f.pattern) patterns[f.fieldName] = f.pattern;
@@ -153,6 +154,7 @@ async function buildRulesConfig(): Promise<RulesConfig> {
         ...(required.length    ? { required }    : {}),
         ...(conditional.length ? { conditional } : {}),
         ...(optional.length    ? { optional }    : {}),
+        ...(forbidden.length   ? { forbidden }   : {}),
         ...(Object.keys(patterns).length ? { patterns } : {}),
       };
     }

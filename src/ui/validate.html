@@ -79,6 +79,11 @@
             <span class="text-xs text-gray-500 dark:text-gray-400 w-28 flex-shrink-0">Flow Step</span>
             <div id="res-flow" class="font-mono text-sm font-semibold text-blue-700 dark:text-blue-400"></div>
           </div>
+          <!-- Overall -->
+          <div class="flex items-center gap-2">
+            <span class="text-xs text-gray-500 dark:text-gray-400 w-28 flex-shrink-0">Overall</span>
+            <div id="res-overall"></div>
+          </div>
         </div>
       </div>
 
@@ -254,6 +259,18 @@
 
       // Flow Step
       document.getElementById('res-flow').textContent = data.flowStep;
+
+      // Overall status
+      const failCount = data.results.filter(r => r.status === 'FAIL').length;
+      const total = data.results.length;
+      const overallEl = document.getElementById('res-overall');
+      if (total === 0) {
+        overallEl.innerHTML = '<span class="px-2 py-0.5 rounded text-xs font-medium bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-400">—</span>';
+      } else if (failCount === 0) {
+        overallEl.innerHTML = '<span class="px-2 py-0.5 rounded text-xs font-medium bg-green-100 text-green-700 dark:bg-green-900/50 dark:text-green-300">PASS</span>';
+      } else {
+        overallEl.innerHTML = `<span class="px-2 py-0.5 rounded text-xs font-medium bg-red-100 text-red-700 dark:bg-red-900/50 dark:text-red-300">FAIL ${failCount}/${total}</span>`;
+      }
 
       // Results table
       const tbody = document.getElementById('res-body');
