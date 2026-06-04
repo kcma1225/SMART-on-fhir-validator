@@ -4,10 +4,11 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Results — IUA/SMART Validator</title>
+  <script>window.BASE_PATH='@@BASE_PATH@@';</script>
   <script>if(localStorage.getItem('darkMode')==='1')document.documentElement.classList.add('dark')</script>
   <script src="https://cdn.tailwindcss.com"></script>
   <script>tailwind.config={darkMode:'class'}</script>
-  <script src="/ui.js?v=2"></script>
+  <script src="ui.js?v=3"></script>
 </head>
 <body class="bg-gray-100 dark:bg-gray-900 min-h-screen transition-colors duration-200">
   <div id="tip" style="display:none;position:fixed;z-index:9999;pointer-events:none;max-width:320px"
@@ -115,14 +116,14 @@
 
   <script>
     const token = localStorage.getItem('token');
-    if (!token) location.href = '/login.html';
+    if (!token) location.href = withBase('/login.html');
 
     async function apiFetch(url, opts = {}) {
-      const res = await fetch('/api' + url, {
+      const res = await fetch(withBase('/api' + url), {
         ...opts,
         headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json', ...opts.headers },
       });
-      if (res.status === 401) { localStorage.removeItem('token'); location.href = '/login.html'; return null; }
+      if (res.status === 401) { localStorage.removeItem('token'); location.href = withBase('/login.html'); return null; }
       const data = await res.json().catch(() => null);
       if (!res.ok) throw new Error(data?.error ?? 'API request failed');
       return data;
@@ -131,7 +132,7 @@
     async function logout() {
       await apiFetch('/auth/logout', { method: 'POST' });
       localStorage.removeItem('token');
-      location.href = '/login.html';
+      location.href = withBase('/login.html');
     }
 
     const tipEl = document.getElementById('tip');
@@ -257,7 +258,7 @@
               ? `<a href="${escA(href)}" target="_blank" rel="noopener" class="text-blue-600 dark:text-blue-400 hover:underline">${esc(cid)}</a>`
               : `<span class="text-gray-500 dark:text-gray-400">${esc(cid)}</span>`}
             <button onclick="copyCid(event,'${escA(cid)}')" class="flex-shrink-0 p-0.5 rounded text-gray-400 hover:text-gray-600 dark:text-gray-500 dark:hover:text-gray-300 transition-colors" title="複製 Connection ID">${COPY_SVG}</button>
-            <a href="/validate.html?connectionId=${encodeURIComponent(cid)}" target="_blank" rel="noopener" class="flex-shrink-0 p-0.5 rounded text-gray-400 hover:text-blue-500 dark:text-gray-500 dark:hover:text-blue-400 transition-colors" title="在 Inspect 頁面驗證">${INSPECT_SVG}</a>
+            <a href="${withBase('/validate.html')}?connectionId=${encodeURIComponent(cid)}" target="_blank" rel="noopener" class="flex-shrink-0 p-0.5 rounded text-gray-400 hover:text-blue-500 dark:text-gray-500 dark:hover:text-blue-400 transition-colors" title="在 Inspect 頁面驗證">${INSPECT_SVG}</a>
           </div>
         </td>
         <td class="px-3 py-2 text-xs text-gray-700 dark:text-gray-300">${esc(r.serverName??'—')}</td>

@@ -4,10 +4,11 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Rules — IUA/SMART Validator</title>
+  <script>window.BASE_PATH='@@BASE_PATH@@';</script>
   <script>if(localStorage.getItem('darkMode')==='1')document.documentElement.classList.add('dark')</script>
   <script src="https://cdn.tailwindcss.com"></script>
   <script>tailwind.config={darkMode:'class'}</script>
-  <script src="/ui.js?v=2"></script>
+  <script src="ui.js?v=3"></script>
 </head>
 <body class="bg-gray-100 dark:bg-gray-900 min-h-screen transition-colors duration-200">
   <div data-app-nav="rules"></div>
@@ -184,17 +185,17 @@
 
   <script>
     const token = localStorage.getItem('token');
-    if (!token) location.href = '/login.html';
+    if (!token) location.href = withBase('/login.html');
 
     let flows = [], fields = [];
     const FLOW_ORDER = ['smart_metadata','authorization_request','token_request_auth_code','token_request_client_cred','fhir_request','token_request_refresh'];
 
     async function apiFetch(url, opts = {}) {
-      const res = await fetch('/api' + url, { ...opts, headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json', ...opts.headers } });
-      if (res.status === 401) { localStorage.removeItem('token'); location.href = '/login.html'; return null; }
+      const res = await fetch(withBase('/api' + url), { ...opts, headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json', ...opts.headers } });
+      if (res.status === 401) { localStorage.removeItem('token'); location.href = withBase('/login.html'); return null; }
       return { ok: res.ok, data: await res.json() };
     }
-    async function logout() { await apiFetch('/auth/logout', { method: 'POST' }); localStorage.removeItem('token'); location.href = '/login.html'; }
+    async function logout() { await apiFetch('/auth/logout', { method: 'POST' }); localStorage.removeItem('token'); location.href = withBase('/login.html'); }
 
     function setMessage(text, ok) {
       const el = document.getElementById('message');

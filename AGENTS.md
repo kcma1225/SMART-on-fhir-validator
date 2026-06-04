@@ -35,8 +35,8 @@ validator/
 ├── compose.yml              Docker Compose (nginx + validator + postgres)
 ├── Dockerfile               Multi-stage build
 ├── entrypoint.sh            prisma db push → node dist/api.js
-├── nginx.conf               Template: /api/* → validator:${API_PORT}, /* → static UI
-│                            Processed by envsubst at nginx startup — only $API_PORT substituted
+├── nginx.conf               Template: ${BASE_PATH}/api/* → validator:${API_PORT}, ${BASE_PATH}/* → static UI
+│                            Processed by envsubst at nginx startup — only $API_PORT and $BASE_PATH substituted
 ├── .env                     Local environment variables (copy from .env.example)
 ├── .env.example             All supported env vars with defaults
 ├── prisma/schema.prisma     Validator DB schema
@@ -120,6 +120,7 @@ All variables defined in `.env` (copy from `.env.example`).
 | `VALIDATOR_DB_PASSWORD` | — | **Required.** PostgreSQL password |
 | `FRONTEND_PORT` | `80` | Host-side port mapped to nginx (container always listens on 80) |
 | `API_PORT` | `3000` | Fastify listen port inside the validator container; substituted into nginx.conf via envsubst |
+| `BASE_PATH` | — (root) | Sub-path prefix for serving behind a path-routing reverse proxy (e.g. `/validator`, no trailing slash); substituted into nginx.conf via envsubst and injected into each HTML page as `window.BASE_PATH` |
 | `ADMIN_USER` | `admin` | UI login username |
 | `ADMIN_PASS` | `admin123` | UI login password |
 | `BASE_URL` | — | Prism web base URL (e.g. `https://host/prism`); seeds DB on first run; used for Connection ID / Share Token hyperlinks and ShareToken URL prefix stripping |
@@ -302,7 +303,8 @@ The prefix is derived from `BASE_URL` at runtime — not hardcoded.
 - **ShareToken resolution** — both `/results?shareToken=X` and `POST /validate { shareToken }` query Prism DB (`connections WHERE share_token = $1`) to resolve to a connectionId.
 - **Server name cache** — `getServerName()` in `prism.ts` caches `backend_servers` for 60 s.
 - **Session auth** — in-memory token map with 8h TTL; suitable for single-instance intranet tool.
-- **nginx template** — `nginx.conf` has `${API_PORT}` placeholder; `compose.yml` runs `envsubst '$API_PORT'` (single-quoted variable list preserves nginx's own `$host`, `$uri` etc.).
+- **nginx template** — `nginx.conf` has `${API_PORT}` and `${BASE_PATH}` placeholders; `compose.yml` runs `envsubst '$API_PORT $BASE_PATH'` (single-quoted variable list preserves nginx's own `$host`, `$uri` etc.).
+- **BASE_PATH / sub-path serving** — `BASE_PATH` (empty = root) prefixes both the `${BASE_PATH}/api/` proxy location and the `${BASE_PATH}/` static location. The api location's trailing-slash `proxy_pass http://validator:.../` strips the prefix so the backend still sees `/auth/login` etc. (no backend change needed). nginx `sub_filter` injects the value into each HTML page as `window.BASE_PATH` (placeholder token `@@BASE_PATH@@`); `ui.js` reads it into `withBase()`, which prefixes every API call, redirect, and nav link. The upstream path-routing proxy must forward the prefix through (no strip).
 - **parseQueryParams fix** — uses `new URLSearchParams(url.slice(url.indexOf('?') + 1))` instead of `new URL(url)`, so relative `req_url` paths (the format Prism stores) parse correctly without a dummy base URL.
 - **`value` in FieldResult** — `checker.ts` extracts the actual runtime value for each checked field. Returned by `/validate` for the Inspect UI but intentionally not persisted in `validation_results` (would bloat the table).
 - **DB port propagation** — `VALIDATOR_DB_PORT` sets `PGPORT` env var inside the postgres container (makes PostgreSQL listen on that port) AND is used in `VALIDATOR_DATABASE_URL`. Changing the port in `.env` propagates to all three places automatically.

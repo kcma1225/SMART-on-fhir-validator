@@ -4,10 +4,11 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>IUA/SMART Validator — 登入</title>
+  <script>window.BASE_PATH='@@BASE_PATH@@';</script>
   <script>if(localStorage.getItem('darkMode')==='1')document.documentElement.classList.add('dark')</script>
   <script src="https://cdn.tailwindcss.com"></script>
   <script>tailwind.config={darkMode:'class'}</script>
-  <script src="/ui.js?v=2"></script>
+  <script src="ui.js?v=3"></script>
 </head>
 <body class="bg-gray-100 dark:bg-gray-900 min-h-screen flex items-center justify-center transition-colors duration-200">
   <div data-login-theme-toggle></div>
@@ -32,19 +33,19 @@
   </div>
 
   <script>
-    if (localStorage.getItem('token')) location.href = '/dashboard.html';
+    if (localStorage.getItem('token')) location.href = withBase('/dashboard.html');
 
     document.getElementById('login-form').addEventListener('submit', async e => {
       e.preventDefault();
       const errEl = document.getElementById('error-msg');
       errEl.classList.add('hidden');
       try {
-        const res = await fetch('/api/auth/login', { method: 'POST', headers: { 'Content-Type': 'application/json' },
+        const res = await fetch(withBase('/api/auth/login'), { method: 'POST', headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ username: document.getElementById('username').value, password: document.getElementById('password').value }) });
         if (!res.ok) throw new Error('帳號或密碼錯誤');
         const { token } = await res.json();
         localStorage.setItem('token', token);
-        location.href = '/dashboard.html';
+        location.href = withBase('/dashboard.html');
       } catch (err) { errEl.textContent = err.message; errEl.classList.remove('hidden'); }
     });
   </script>

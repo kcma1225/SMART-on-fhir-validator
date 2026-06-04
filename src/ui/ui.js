@@ -1,5 +1,19 @@
 (function () {
   const DARK_MODE_KEY = 'darkMode';
+
+  // Base path prefix when served behind a path-routing reverse proxy.
+  // Injected into HTML by nginx as window.BASE_PATH ('@@BASE_PATH@@' when unset).
+  const rawBase = typeof window.BASE_PATH === 'string' ? window.BASE_PATH : '';
+  const BASE_PATH = (rawBase && rawBase !== '@@BASE_PATH@@')
+    ? rawBase.replace(/\/+$/, '')
+    : '';
+  function withBase(path) {
+    if (/^[a-z]+:\/\//i.test(path)) return path;
+    return BASE_PATH + (path.startsWith('/') ? path : '/' + path);
+  }
+  window.BASE_PATH = BASE_PATH;
+  window.withBase = withBase;
+
   const navItems = [
     ['dashboard', 'Dashboard', '/dashboard.html'],
     ['results', 'Results', '/results.html'],
@@ -55,7 +69,7 @@
     const links = navItems.map(([key, label, href], index) => {
       const classes = key === active ? 'text-blue-300 font-medium' : 'hover:text-gray-300';
       const spacer = index === 4 ? ' ml-auto' : '';
-      return `<a href="${href}" class="${spacer}${spacer ? ' ' : ''}${classes}">${label}</a>`;
+      return `<a href="${withBase(href)}" class="${spacer}${spacer ? ' ' : ''}${classes}">${label}</a>`;
     }).join('');
 
     container.innerHTML = `<nav class="bg-gray-800 dark:bg-gray-950 text-white px-6 py-3 flex items-center gap-6">

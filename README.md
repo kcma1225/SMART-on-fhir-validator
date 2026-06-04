@@ -41,6 +41,7 @@ cp .env.example .env
 | `VALIDATOR_DB_NAME` | `validator` | Postgres database name |
 | `FRONTEND_PORT` | `80` | Host port mapped to nginx |
 | `API_PORT` | `3000` | Fastify listen port; substituted into nginx.conf at startup |
+| `BASE_PATH` | — (root) | Sub-path prefix when served behind a path-routing reverse proxy (e.g. `/validator`); substituted into nginx.conf and injected into the UI |
 | `ADMIN_USER` | `admin` | UI login username |
 | `ADMIN_PASS` | `admin123` | UI login password |
 | `BASE_URL` | — | Prism web base URL (e.g. `https://host/prism`); used for Connection ID / Share Token hyperlinks |
@@ -96,5 +97,6 @@ VALIDATOR_DATABASE_URL="postgresql://validator:password@localhost:5432/validator
 
 - Rules changes automatically clear `processed_connections`, causing the poller to re-validate all recent connections on the next tick.
 - The Inspect page opens in a new tab when launched from the Results list.
-- `nginx.conf` is a template; `${API_PORT}` is substituted by `envsubst` at nginx startup. Only `$API_PORT` is substituted — nginx's own `$host`, `$uri` etc. are preserved.
+- `nginx.conf` is a template; `${API_PORT}` and `${BASE_PATH}` are substituted by `envsubst` at nginx startup. Only those two are substituted — nginx's own `$host`, `$uri` etc. are preserved.
+- **Serving under a sub-path:** set `BASE_PATH` (e.g. `/validator`, no trailing slash). nginx then serves the UI and `/api` under that prefix, and the UI emits prefixed URLs (`window.BASE_PATH` is injected into each page and used by `withBase()` in `ui.js`). The upstream reverse proxy must forward the prefix through — do **not** strip it. Example upstream block: `location /validator/ { proxy_pass http://prism-validator-host; }` (no trailing slash on `proxy_pass`).
 - Query params are parsed directly from the URL's `?` position using `URLSearchParams`, so both absolute and relative `req_url` formats are supported.
