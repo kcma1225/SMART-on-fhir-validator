@@ -110,25 +110,37 @@ function checkSimpleFields(
   const results: FieldResult[] = [];
 
   for (const field of def.required ?? []) {
-    const present = field in data;
-    results.push({
-      field,
-      location,
-      required: true,
-      status: present ? 'PASS' : 'FAIL',
-      ...(present ? { value: toValueString(data[field]) } : { detail: `field not present in ${location.replace(/_/g, ' ')}` }),
-    });
+    if (!(field in data)) {
+      results.push({
+        field,
+        location,
+        required: true,
+        status: 'FAIL',
+        detail: `field not present in ${location.replace(/_/g, ' ')}`,
+      });
+      continue;
+    }
+    const value = toValueString(data[field]);
+    const pattern = def.patterns?.[field];
+    if (pattern && !new RegExp(pattern).test(value)) {
+      results.push({ field, location, required: true, status: 'FAIL', value, detail: `value does not match pattern ${pattern}` });
+    } else {
+      results.push({ field, location, required: true, status: 'PASS', value });
+    }
   }
 
   for (const field of [...(def.optional ?? []), ...(def.conditional ?? [])]) {
-    const present = field in data;
-    results.push({
-      field,
-      location,
-      required: false,
-      status: present ? 'PASS' : 'SKIP',
-      ...(present ? { value: toValueString(data[field]) } : {}),
-    });
+    if (!(field in data)) {
+      results.push({ field, location, required: false, status: 'SKIP' });
+      continue;
+    }
+    const value = toValueString(data[field]);
+    const pattern = def.patterns?.[field];
+    if (pattern && !new RegExp(pattern).test(value)) {
+      results.push({ field, location, required: false, status: 'FAIL', value, detail: `value does not match pattern ${pattern}` });
+    } else {
+      results.push({ field, location, required: false, status: 'PASS', value });
+    }
   }
 
   for (const field of def.forbidden ?? []) {

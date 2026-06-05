@@ -84,6 +84,7 @@ model ValidatorSetting {
   pollingEnabled             Boolean   @default(true) @map("polling_enabled")
   pollingIntervalSeconds     Int       @default(30) @map("polling_interval_seconds")
   pollingBatchSize           Int       @default(100) @map("polling_batch_size")
+  lookbackHours              Int       @default(24) @map("lookback_hours")
   baseUrl                    String?   @map("base_url")
   rulesUpdatedAt             DateTime? @map("rules_updated_at")
   updatedAt                  DateTime  @updatedAt @map("updated_at")

@@ -249,7 +249,7 @@
     };
     function detailIcon(d) {
       if (!d) return '';
-      const icon = d.startsWith('header present but does not match') ? ICONS.pattern : d.startsWith('header not present') ? ICONS.header : ICONS.field;
+      const icon = d.includes('does not match pattern') ? ICONS.pattern : d.startsWith('header not present') ? ICONS.header : ICONS.field;
       return `<span data-tip="${escA(d)}" class="inline-flex items-center cursor-default">${icon}</span>`;
     }
 

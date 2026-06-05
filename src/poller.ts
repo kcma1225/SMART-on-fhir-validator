@@ -16,6 +16,7 @@ interface PollerStatusResponse extends PollerStatus {
   pollingEnabled: boolean;
   pollingIntervalSeconds: number;
   pollingBatchSize: number;
+  pollingLookbackHours: number;
 }
 
 const status: PollerStatus = {
@@ -39,6 +40,7 @@ export async function getPollerStatus(): Promise<PollerStatusResponse> {
     pollingEnabled: pollingSettings.enabled,
     pollingIntervalSeconds: pollingSettings.intervalSeconds,
     pollingBatchSize: pollingSettings.batchSize,
+    pollingLookbackHours: pollingSettings.lookbackHours,
   };
 }
 
@@ -67,7 +69,7 @@ export async function runOnce(): Promise<void> {
     }
     status.lastSkipReason = null;
 
-    const candidates = await getRecentConnections(pollingSettings.batchSize * 5);
+    const candidates = await getRecentConnections(pollingSettings.batchSize * 5, pollingSettings.lookbackHours);
     if (candidates.length === 0) return;
 
     const prisma = getPrismaClient();

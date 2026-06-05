@@ -28,6 +28,7 @@ export interface PollingSettings {
   enabled: boolean;
   intervalSeconds: number;
   batchSize: number;
+  lookbackHours: number;
 }
 
 async function ensureSettingsRow(): Promise<void> {
@@ -120,6 +121,7 @@ export async function getPollingSettings(): Promise<PollingSettings> {
     enabled: setting.pollingEnabled,
     intervalSeconds: setting.pollingIntervalSeconds,
     batchSize: setting.pollingBatchSize,
+    lookbackHours: setting.lookbackHours,
   };
 }
 
@@ -170,15 +172,20 @@ export async function savePollingSettings(input: {
   enabled: boolean;
   intervalSeconds: number;
   batchSize: number;
+  lookbackHours: number;
 }): Promise<PollingSettings> {
   const intervalSeconds = Number(input.intervalSeconds);
   const batchSize = Number(input.batchSize);
+  const lookbackHours = Number(input.lookbackHours);
 
   if (!Number.isInteger(intervalSeconds) || intervalSeconds < 5 || intervalSeconds > 3600) {
     throw new Error('Polling interval must be an integer between 5 and 3600 seconds');
   }
   if (!Number.isInteger(batchSize) || batchSize < 1 || batchSize > 1000) {
     throw new Error('Polling batch size must be an integer between 1 and 1000');
+  }
+  if (!Number.isInteger(lookbackHours) || lookbackHours < 1 || lookbackHours > 8760) {
+    throw new Error('Lookback hours must be an integer between 1 and 8760 (1 year)');
   }
 
   await ensureSettingsRow();
@@ -189,6 +196,7 @@ export async function savePollingSettings(input: {
       pollingEnabled: Boolean(input.enabled),
       pollingIntervalSeconds: intervalSeconds,
       pollingBatchSize: batchSize,
+      lookbackHours,
     },
   });
 
@@ -196,5 +204,6 @@ export async function savePollingSettings(input: {
     enabled: setting.pollingEnabled,
     intervalSeconds: setting.pollingIntervalSeconds,
     batchSize: setting.pollingBatchSize,
+    lookbackHours: setting.lookbackHours,
   };
 }

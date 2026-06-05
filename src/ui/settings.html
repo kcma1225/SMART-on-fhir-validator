@@ -56,7 +56,7 @@
         <h3 class="font-semibold text-lg dark:text-gray-100">Polling</h3>
         <p class="text-sm text-gray-500 dark:text-gray-400 mt-1">設定 validator 自動從 Prism database 抓取 connections 的排程。</p>
       </div>
-      <div class="grid md:grid-cols-3 gap-4">
+      <div class="grid md:grid-cols-4 gap-4">
         <label class="flex items-center gap-2 text-sm text-gray-700 dark:text-gray-300">
           <input type="checkbox" id="polling-enabled" class="rounded border-gray-300 dark:border-gray-600">
           啟用 Polling
@@ -71,11 +71,33 @@
           <input type="number" id="polling-batch" min="1" max="1000"
             class="w-full border border-gray-300 dark:border-gray-600 rounded px-3 py-2 text-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500">
         </div>
+        <div>
+          <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">回溯時間 (小時)</label>
+          <input type="number" id="polling-lookback" min="1" max="8760"
+            class="w-full border border-gray-300 dark:border-gray-600 rounded px-3 py-2 text-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500">
+          <p class="text-xs text-gray-400 dark:text-gray-500 mt-1">抓取多久以前的封包（預設 24 = 最近一天）</p>
+        </div>
       </div>
       <div class="flex items-center gap-3 mt-4">
         <button onclick="savePolling()" id="polling-save-btn" class="bg-blue-600 text-white px-5 py-2 rounded text-sm font-medium hover:bg-blue-700 transition">儲存 Polling 設定</button>
       </div>
       <p id="polling-message" class="text-sm mt-3 hidden"></p>
+    </div>
+
+    <!-- Danger zone -->
+    <div class="border-2 border-red-400 dark:border-red-600 rounded-lg p-5 mt-6">
+      <div class="mb-4">
+        <h3 class="font-semibold text-lg text-red-700 dark:text-red-400">危險區域</h3>
+        <p class="text-sm text-gray-500 dark:text-gray-400 mt-1">刪除資料庫內<strong>所有</strong>驗證結果紀錄，並立即重新抓取最近 <span id="purge-lookback" class="font-semibold">24</span> 小時的封包重新驗證（SMART 與 IUA）。此動作無法復原。</p>
+      </div>
+      <button onclick="purgeResults()" id="purge-btn"
+        class="border-2 border-red-500 text-red-600 dark:text-red-400 dark:border-red-500 px-5 py-2 rounded text-sm font-semibold hover:bg-red-50 dark:hover:bg-red-900/20 transition disabled:opacity-50 disabled:cursor-not-allowed">
+        刪除所有 Results 並重新抓取
+      </button>
+      <div id="purge-progress" class="hidden mt-4 px-3 py-2 rounded-lg bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-700 text-sm text-red-700 dark:text-red-300 flex items-center gap-2">
+        <span id="purge-icon" class="flex-shrink-0"></span>
+        <span id="purge-msg"></span>
+      </div>
     </div>
   </div>
 
@@ -104,7 +126,7 @@
     async function loadSettings() {
       const [db, poll, bu] = await Promise.all([apiFetch('/settings/prism-db'), apiFetch('/settings/polling'), apiFetch('/settings/base-url')]);
       if (db) { document.getElementById('db-url').value = db.data.url ?? ''; setStatus(db.data.isVerified); setVerifiedAt(db.data.verifiedAt); }
-      if (poll) { document.getElementById('polling-enabled').checked = Boolean(poll.data.enabled); document.getElementById('polling-interval').value = poll.data.intervalSeconds; document.getElementById('polling-batch').value = poll.data.batchSize; }
+      if (poll) { document.getElementById('polling-enabled').checked = Boolean(poll.data.enabled); document.getElementById('polling-interval').value = poll.data.intervalSeconds; document.getElementById('polling-batch').value = poll.data.batchSize; document.getElementById('polling-lookback').value = poll.data.lookbackHours; updatePurgeHint(poll.data.lookbackHours); }
       if (bu) document.getElementById('base-url').value = bu.data.baseUrl ?? '';
     }
 
@@ -134,14 +156,63 @@
     async function savePolling() {
       const btn = document.getElementById('polling-save-btn');
       btn.disabled = true; btn.textContent = '儲存中...';
-      const result = await apiFetch('/settings/polling', { method: 'PUT', body: JSON.stringify({ enabled: document.getElementById('polling-enabled').checked, intervalSeconds: Number(document.getElementById('polling-interval').value), batchSize: Number(document.getElementById('polling-batch').value) }) });
+      const result = await apiFetch('/settings/polling', { method: 'PUT', body: JSON.stringify({ enabled: document.getElementById('polling-enabled').checked, intervalSeconds: Number(document.getElementById('polling-interval').value), batchSize: Number(document.getElementById('polling-batch').value), lookbackHours: Number(document.getElementById('polling-lookback').value) }) });
       btn.disabled = false; btn.textContent = '儲存 Polling 設定';
       if (!result) return;
       if (!result.ok) { setPollingMessage(result.data?.error ?? 'Polling 設定儲存失敗。', false); return; }
       document.getElementById('polling-enabled').checked = Boolean(result.data.settings.enabled);
       document.getElementById('polling-interval').value = result.data.settings.intervalSeconds;
       document.getElementById('polling-batch').value = result.data.settings.batchSize;
+      document.getElementById('polling-lookback').value = result.data.settings.lookbackHours;
+      updatePurgeHint(result.data.settings.lookbackHours);
       setPollingMessage('Polling 設定已儲存並套用。', true);
+    }
+
+    // ── Danger zone: purge all results + re-ingest last 24h ──────────────────
+    const PURGE_SPIN = `<svg class="animate-spin h-4 w-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"></path></svg>`;
+    const PURGE_CHECK = `<svg class="h-4 w-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7"/></svg>`;
+    let purgePollTimer = null;
+
+    function updatePurgeHint(hours) {
+      const el = document.getElementById('purge-lookback');
+      if (el && hours) el.textContent = String(hours);
+    }
+
+    function showPurge(msg, icon) {
+      document.getElementById('purge-icon').innerHTML = icon;
+      document.getElementById('purge-msg').textContent = msg;
+      document.getElementById('purge-progress').classList.remove('hidden');
+    }
+
+    async function purgeResults() {
+      if (!confirm('確定要刪除資料庫內「所有」驗證結果紀錄，並重新抓取最近 24 小時的封包重新驗證嗎？\n\n此動作無法復原。')) return;
+      if (!confirm('再次確認 ⚠\n\n這會清空所有 Results 紀錄並重新跑驗證，確定要繼續？')) return;
+      const btn = document.getElementById('purge-btn');
+      btn.disabled = true;
+      showPurge('處理中…', PURGE_SPIN);
+      const result = await apiFetch('/results/purge', { method: 'POST' });
+      if (!result) { btn.disabled = false; return; }
+      if (!result.ok) { showPurge(result.data?.error ?? '操作失敗', '⚠'); btn.disabled = false; return; }
+      pollPurgeStatus();
+    }
+
+    async function pollPurgeStatus() {
+      clearTimeout(purgePollTimer);
+      const result = await apiFetch('/results/purge/status');
+      if (!result || !result.ok) { purgePollTimer = setTimeout(pollPurgeStatus, 2000); return; }
+      const s = result.data;
+      if (s.running) {
+        showPurge(`重新抓取中… (${s.progress} / ${s.total})`, PURGE_SPIN);
+        purgePollTimer = setTimeout(pollPurgeStatus, 1000);
+      } else if (s.completedAt) {
+        document.getElementById('purge-btn').disabled = false;
+        if (s.error) {
+          showPurge('失敗：' + s.error + '（未刪除任何資料）', '⚠');
+        } else {
+          const failMsg = s.failed ? `，${s.failed} 筆失敗` : '';
+          showPurge(`✓ 完成：已清空舊紀錄，重新驗證 ${s.reingested} 筆${failMsg}`, PURGE_CHECK);
+        }
+      }
     }
 
     loadSettings();

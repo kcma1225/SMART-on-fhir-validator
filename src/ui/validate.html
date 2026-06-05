@@ -183,7 +183,7 @@
     };
     function detailIcon(d) {
       if (!d) return '';
-      const icon = d.startsWith('header present but does not match') ? DETAIL_ICONS.pattern
+      const icon = d.includes('does not match pattern') ? DETAIL_ICONS.pattern
                  : d.startsWith('header not present') ? DETAIL_ICONS.header
                  : DETAIL_ICONS.field;
       return `<span data-tip="${escapeAttr(d)}" class="inline-flex items-center cursor-default flex-shrink-0">${icon}</span>`;
@@ -322,7 +322,11 @@
       // Results table
       const tbody = document.getElementById('res-body');
       if (results.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="5" class="px-3 py-4 text-center text-gray-400 dark:text-gray-500">無欄位結果（unknown flow）</td></tr>';
+        const isWellKnown = (currentData.reqUrl || '').includes('/.well-known/');
+        const emptyMsg = (isWellKnown && selectedStandard !== 'SMART')
+          ? `${selectedStandard} 不驗證 well-known（metadata）端點`
+          : '無欄位結果（unknown flow）';
+        tbody.innerHTML = `<tr><td colspan="5" class="px-3 py-4 text-center text-gray-400 dark:text-gray-500">${escapeHtml(emptyMsg)}</td></tr>`;
       } else {
         tbody.innerHTML = results.map(r => {
           const statusCell = `<div class="flex items-center gap-1">

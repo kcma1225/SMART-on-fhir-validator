@@ -14,7 +14,10 @@ function matches(conn: PrismConnection, rule: FlowRule): boolean {
     if (conn.req_method.toUpperCase() !== identify.method.toUpperCase()) return false;
   }
 
-  if (!conn.req_url.includes(identify.url_contains)) return false;
+  // url_contains may list several alternatives separated by "|"; the request
+  // matches if it contains ANY of them (e.g. smart-configuration OR openid-configuration).
+  const urlAlternatives = identify.url_contains.split('|').map(s => s.trim()).filter(Boolean);
+  if (!urlAlternatives.some(part => conn.req_url.includes(part))) return false;
 
   // A .well-known discovery document (e.g. /fhir/.well-known/smart-configuration)
   // is never a resource/auth request — it must only match a metadata-style rule

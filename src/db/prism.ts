@@ -24,8 +24,8 @@ export async function testPrismDatabaseConnection(url: string): Promise<void> {
   }
 }
 
-export async function getRecentConnections(limit: number): Promise<PrismConnection[]> {
-  const since = new Date(Date.now() - 24 * 60 * 60 * 1000);
+export async function getRecentConnections(limit: number, sinceHours = 24): Promise<PrismConnection[]> {
+  const since = new Date(Date.now() - sinceHours * 60 * 60 * 1000);
   const db = await getPool();
   const { rows } = await db.query<PrismConnection>(
     `SELECT
@@ -47,6 +47,34 @@ export async function getRecentConnections(limit: number): Promise<PrismConnecti
      ORDER BY created_at DESC
      LIMIT $2`,
     [since, limit],
+  );
+  return rows;
+}
+
+// Batched fetch of every qualifying connection in the last `hours` window.
+// A single query (response body included) keeps external-DB load minimal — used
+// by the "purge & re-ingest" action so it does not hit Prism once per row.
+export async function getConnectionsSince(hours: number, maxRows = 10000): Promise<PrismConnection[]> {
+  const since = new Date(Date.now() - hours * 60 * 60 * 1000);
+  const db = await getPool();
+  const { rows } = await db.query<PrismConnection>(
+    `SELECT
+       id::text        AS id,
+       user_id,
+       server_id::text AS server_id,
+       share_token,
+       req_method,
+       req_url,
+       req_headers,
+       req_body,
+       res_body
+     FROM connections
+     WHERE created_at >= $1
+       AND is_system_heartbeat = false
+       AND (is_path_ignored = false OR req_url LIKE '%/.well-known/%')
+     ORDER BY created_at ASC
+     LIMIT $2`,
+    [since, maxRows],
   );
   return rows;
 }

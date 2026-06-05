@@ -1,7 +1,7 @@
 import Fastify from 'fastify';
 import * as crypto from 'crypto';
 import { getPrismaClient } from './db/validator';
-import { getConnectionById, getBackendServers, getConnectionIdByShareToken, testPrismDatabaseConnection } from './db/prism';
+import { getConnectionById, getConnectionsSince, getBackendServers, getConnectionIdByShareToken, testPrismDatabaseConnection } from './db/prism';
 import { validateAndSave } from './core';
 import { runTests } from './tester';
 import { startPoller, stopPoller, getPollerStatus } from './poller';
@@ -85,6 +85,64 @@ async function revalidateAllExisting(): Promise<void> {
     await startPoller();
   }
 }
+const purgeState = {
+  running: false,
+  progress: 0,
+  total: 0,
+  reingested: 0,
+  failed: 0,
+  completedAt: null as string | null,
+  error: null as string | null,
+};
+
+// Delete every validation result, then re-fetch and re-validate the last 24h of
+// connections. Connections are pulled in a single batched query (which already
+// carries the response body) so external Prism DB load stays minimal. The fetch
+// runs BEFORE any delete, so an unreachable Prism aborts without data loss.
+async function purgeAndReingest(): Promise<void> {
+  if (purgeState.running) return;
+  purgeState.running = true;
+  purgeState.progress = 0;
+  purgeState.total = 0;
+  purgeState.reingested = 0;
+  purgeState.failed = 0;
+  purgeState.completedAt = null;
+  purgeState.error = null;
+
+  stopPoller();
+  try {
+    let connections;
+    try {
+      const { lookbackHours } = await getPollingSettings();
+      connections = await getConnectionsSince(lookbackHours);
+    } catch (err) {
+      purgeState.error = err instanceof Error ? err.message : 'Unable to fetch connections from Prism';
+      console.error('[purge] fetch failed, nothing deleted:', err);
+      return;
+    }
+
+    const prisma = getPrismaClient();
+    await prisma.validationResult.deleteMany({});
+    await prisma.processedConnection.deleteMany({});
+
+    purgeState.total = connections.length;
+    for (const conn of connections) {
+      try {
+        await validateAndSave(conn);
+        purgeState.reingested++;
+      } catch (err) {
+        purgeState.failed++;
+        console.error(`[purge] error on ${conn.id}:`, err);
+      }
+      purgeState.progress++;
+    }
+  } finally {
+    purgeState.running = false;
+    purgeState.completedAt = new Date().toISOString();
+    await startPoller();
+  }
+}
+
 const SESSION_TTL_MS = 8 * 60 * 60 * 1000;
 
 const ADMIN_USER = process.env.ADMIN_USER ?? 'admin';
@@ -195,6 +253,16 @@ app.post('/revalidate', { preHandler: requireAuth }, async (_req, reply) => {
 
 app.get('/revalidate/status', { preHandler: requireAuth }, async () => revalidateState);
 
+app.post('/results/purge', { preHandler: requireAuth }, async (_req, reply) => {
+  if (purgeState.running) {
+    return reply.code(409).send({ error: 'Purge already in progress' });
+  }
+  purgeAndReingest().catch(err => console.error('[purge] fatal:', err));
+  return { ok: true, message: 'Purge and re-ingest started' };
+});
+
+app.get('/results/purge/status', { preHandler: requireAuth }, async () => purgeState);
+
 app.get('/settings/base-url', { preHandler: requireAuth }, async () => ({ baseUrl: await getBaseUrl() }));
 
 app.put('/settings/base-url', { preHandler: requireAuth }, async (req, reply) => {
@@ -215,6 +283,7 @@ app.put('/settings/polling', { preHandler: requireAuth }, async (req, reply) => 
     enabled?: boolean;
     intervalSeconds?: number;
     batchSize?: number;
+    lookbackHours?: number;
   };
 
   try {
@@ -222,6 +291,7 @@ app.put('/settings/polling', { preHandler: requireAuth }, async (req, reply) => 
       enabled: Boolean(body.enabled),
       intervalSeconds: Number(body.intervalSeconds),
       batchSize: Number(body.batchSize),
+      lookbackHours: Number(body.lookbackHours),
     });
     await startPoller();
     return { ok: true, settings };
