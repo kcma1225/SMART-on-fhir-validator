@@ -41,7 +41,9 @@ export async function getRecentConnections(limit: number): Promise<PrismConnecti
      FROM connections
      WHERE created_at >= $1
        AND is_system_heartbeat = false
-       AND is_path_ignored = false
+       -- Prism flags discovery docs (e.g. /.well-known/smart-configuration) as
+       -- path-ignored; keep them so SMART metadata still gets validated.
+       AND (is_path_ignored = false OR req_url LIKE '%/.well-known/%')
      ORDER BY created_at DESC
      LIMIT $2`,
     [since, limit],

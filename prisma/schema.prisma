@@ -13,6 +13,7 @@ model ValidationResult {
   userId        Int?     @map("user_id")
   serverId      String?  @map("server_id")
   serverName    String?  @map("server_name")
+  standard      String
   flowStep      String   @map("flow_step")
   fieldLocation String   @map("field_location")
   fieldName     String   @map("field_name")
@@ -23,10 +24,12 @@ model ValidationResult {
 
   @@index([connectionId])
   @@index([serverId])
+  @@index([standard])
   @@index([flowStep])
   @@index([status])
   @@index([validatedAt])
   @@index([serverId, validatedAt])
+  @@index([standard, validatedAt])
   @@index([flowStep, validatedAt])
   @@index([status, validatedAt])
   @@map("validation_results")
@@ -41,7 +44,8 @@ model ProcessedConnection {
 
 model FlowIdentifier {
   id            String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  flowStep      String   @unique @map("flow_step")
+  standard      String
+  flowStep      String   @map("flow_step")
   description   String
   method        String
   urlContains   String   @map("url_contains")
@@ -50,12 +54,14 @@ model FlowIdentifier {
   createdAt     DateTime @default(now()) @map("created_at")
   updatedAt     DateTime @updatedAt @map("updated_at")
 
+  @@unique([standard, flowStep])
   @@index([priority])
   @@map("flow_identifiers")
 }
 
 model FlowRuleField {
   id            String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  standard      String
   flowStep      String   @map("flow_step")
   fieldName     String   @map("field_name")
   fieldLocation String   @map("field_location")
@@ -65,6 +71,7 @@ model FlowRuleField {
   createdAt     DateTime @default(now()) @map("created_at")
   updatedAt     DateTime @updatedAt @map("updated_at")
 
+  @@index([standard, flowStep])
   @@index([flowStep])
   @@map("flow_rule_fields")
 }

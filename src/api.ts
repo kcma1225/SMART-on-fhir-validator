@@ -23,7 +23,13 @@ import {
   updateFlowIdentifier,
   updateRuleField,
 } from './rules-db';
+import { STANDARDS } from './types';
+import type { Standard } from './types';
 import type { FastifyRequest, FastifyReply } from 'fastify';
+
+function normalizeStandard(value: string | undefined): Standard {
+  return (value && (STANDARDS as string[]).includes(value)) ? (value as Standard) : 'SMART';
+}
 
 const app = Fastify({ logger: { level: 'info' } });
 
@@ -227,17 +233,22 @@ app.put('/settings/polling', { preHandler: requireAuth }, async (req, reply) => 
 
 // ── Rules ────────────────────────────────────────────────────────────────────
 
-app.get('/rules', { preHandler: requireAuth }, async () => listRuleDefinitions());
+app.get('/rules', { preHandler: requireAuth }, async (req) => {
+  const { standard } = req.query as { standard?: string };
+  return listRuleDefinitions(normalizeStandard(standard));
+});
 
 app.put('/rules/flows/:flowStep', { preHandler: requireAuth }, async (req, reply) => {
   const { flowStep } = req.params as { flowStep: string };
+  const body = req.body as {
+    standard?: string;
+    description: string;
+    method: string;
+    urlContains: string;
+    bodyGrantType?: string | null;
+  };
   try {
-    const flow = await updateFlowIdentifier(flowStep, req.body as {
-      description: string;
-      method: string;
-      urlContains: string;
-      bodyGrantType?: string | null;
-    });
+    const flow = await updateFlowIdentifier(normalizeStandard(body.standard), flowStep, body);
     return { ok: true, flow };
   } catch (err) {
     const message = err instanceof Error ? err.message : 'Unable to update flow identifier';
@@ -248,6 +259,7 @@ app.put('/rules/flows/:flowStep', { preHandler: requireAuth }, async (req, reply
 app.post('/rules/fields', { preHandler: requireAuth }, async (req, reply) => {
   try {
     const field = await createRuleField(req.body as {
+      standard: string;
       flowStep: string;
       fieldName: string;
       fieldLocation: string;
@@ -266,6 +278,7 @@ app.put('/rules/fields/:id', { preHandler: requireAuth }, async (req, reply) => 
   const { id } = req.params as { id: string };
   try {
     const field = await updateRuleField(id, req.body as {
+      standard: string;
       flowStep: string;
       fieldName: string;
       fieldLocation: string;
@@ -333,15 +346,18 @@ app.post('/validate', { preHandler: requireAuth }, async (req, reply) => {
   return {
     connectionId: output.connectionId,
     shareToken: resolvedToken,
-    flowStep: output.flowStep,
     reqUrl: conn.req_url,
-    results: output.results.map(r => ({
-      field: r.field,
-      location: r.location,
-      required: r.required,
-      status: r.status,
-      ...(r.detail !== undefined ? { detail: r.detail } : {}),
-      ...(r.value !== undefined ? { value: r.value } : {}),
+    validations: output.validations.map(v => ({
+      standard: v.standard,
+      flowStep: v.flowStep,
+      results: v.results.map(r => ({
+        field: r.field,
+        location: r.location,
+        required: r.required,
+        status: r.status,
+        ...(r.detail !== undefined ? { detail: r.detail } : {}),
+        ...(r.value !== undefined ? { value: r.value } : {}),
+      })),
     })),
   };
 });
@@ -363,6 +379,7 @@ app.get('/results', { preHandler: requireAuth }, async (req) => {
     shareToken,
     connectionId,
     serverId,
+    standard,
     flowStep,
     status,
     from,
@@ -378,7 +395,7 @@ app.get('/results', { preHandler: requireAuth }, async (req) => {
     const resolvedId = await getConnectionIdByShareToken(shareToken).catch(() => null);
     if (!resolvedId) return [];
     return prisma.validationResult.findMany({
-      where: { connectionId: resolvedId },
+      where: { connectionId: resolvedId, ...(standard ? { standard } : {}) },
       orderBy: { validatedAt: 'desc' },
       take,
       skip,
@@ -389,6 +406,7 @@ app.get('/results', { preHandler: requireAuth }, async (req) => {
     where: {
       ...(connectionId ? { connectionId: { contains: connectionId } } : {}),
       ...(serverId ? { serverId } : {}),
+      ...(standard ? { standard } : {}),
       ...(flowStep ? { flowStep } : {}),
       ...(status ? { status } : {}),
       ...((from ?? to) ? {

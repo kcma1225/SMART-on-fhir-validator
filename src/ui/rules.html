@@ -3,6 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <link rel="icon" type="image/x-icon" href="favicon.ico">
   <title>Rules — IUA/SMART Validator</title>
   <script>window.BASE_PATH='@@BASE_PATH@@';</script>
   <script>if(localStorage.getItem('darkMode')==='1')document.documentElement.classList.add('dark')</script>
@@ -14,6 +15,14 @@
   <div data-app-nav="rules"></div>
 
   <div class="max-w-7xl mx-auto p-6">
+    <!-- Standard tabs -->
+    <div class="flex items-center gap-1 mb-4 border-b border-gray-200 dark:border-gray-700">
+      <button type="button" data-standard="SMART" onclick="switchStandard('SMART')"
+        class="std-tab px-5 py-2 text-sm font-semibold border-b-2 -mb-px transition">SMART</button>
+      <button type="button" data-standard="IUA" onclick="switchStandard('IUA')"
+        class="std-tab px-5 py-2 text-sm font-semibold border-b-2 -mb-px transition">IUA</button>
+    </div>
+
     <div class="flex items-center justify-between mb-4">
       <div class="flex items-center gap-2">
         <h2 class="text-2xl font-bold dark:text-gray-100">欄位檢查規則</h2>
@@ -188,7 +197,28 @@
     if (!token) location.href = withBase('/login.html');
 
     let flows = [], fields = [];
+    let currentStandard = localStorage.getItem('rulesStandard') || 'SMART';
     const FLOW_ORDER = ['smart_metadata','authorization_request','token_request_auth_code','token_request_client_cred','fhir_request','token_request_refresh'];
+
+    function renderStandardTabs() {
+      document.querySelectorAll('.std-tab').forEach(btn => {
+        const active = btn.dataset.standard === currentStandard;
+        const activeColor = btn.dataset.standard === 'IUA'
+          ? 'border-purple-600 text-purple-600 dark:text-purple-400 dark:border-purple-400'
+          : 'border-blue-600 text-blue-600 dark:text-blue-400 dark:border-blue-400';
+        btn.className = `std-tab px-5 py-2 text-sm font-semibold border-b-2 -mb-px transition ${active
+          ? activeColor
+          : 'border-transparent text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200'}`;
+      });
+    }
+
+    function switchStandard(std) {
+      if (std === currentStandard) return;
+      currentStandard = std;
+      localStorage.setItem('rulesStandard', std);
+      renderStandardTabs();
+      loadRules();
+    }
 
     async function apiFetch(url, opts = {}) {
       const res = await fetch(withBase('/api' + url), { ...opts, headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json', ...opts.headers } });
@@ -313,6 +343,7 @@
     async function saveField() {
       const id = document.getElementById('field-id').value;
       const result = await apiFetch(id ? `/rules/fields/${id}` : '/rules/fields', { method: id ? 'PUT' : 'POST', body: JSON.stringify({
+        standard: currentStandard,
         flowStep: document.getElementById('field-flow').value, fieldName: document.getElementById('field-name').value,
         fieldLocation: document.getElementById('field-location').value, fieldType: document.getElementById('field-type').value,
         pattern: document.getElementById('field-pattern').value || null, sortOrder: Number(document.getElementById('field-sort').value || 0),
@@ -326,6 +357,7 @@
     async function saveFlow() {
       const flowStep = document.getElementById('flow-step').value;
       const result = await apiFetch(`/rules/flows/${encodeURIComponent(flowStep)}`, { method: 'PUT', body: JSON.stringify({
+        standard: currentStandard,
         description: document.getElementById('flow-description').value, method: document.getElementById('flow-method').value,
         urlContains: document.getElementById('flow-url-contains').value, bodyGrantType: document.getElementById('flow-grant-type').value || null,
       }) });
@@ -344,7 +376,7 @@
     }
 
     async function loadRules() {
-      const result = await apiFetch('/rules');
+      const result = await apiFetch('/rules?standard=' + encodeURIComponent(currentStandard));
       if (!result) return;
       flows = result.data.flows; fields = result.data.fields;
       sortRulesData(); populateSelects(); renderRules();
@@ -366,6 +398,7 @@
     document.getElementById('flow-panel').addEventListener('click', e => { if (e.target.id==='flow-panel') closeFlowForm(); });
     document.addEventListener('keydown', e => { if (e.key==='Escape') { closeFieldForm(); closeFlowForm(); } });
 
+    renderStandardTabs();
     loadRules();
   </script>
 </body>

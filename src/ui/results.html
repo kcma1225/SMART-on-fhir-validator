@@ -3,6 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <link rel="icon" type="image/x-icon" href="favicon.ico">
   <title>Results — IUA/SMART Validator</title>
   <script>window.BASE_PATH='@@BASE_PATH@@';</script>
   <script>if(localStorage.getItem('darkMode')==='1')document.documentElement.classList.add('dark')</script>
@@ -96,7 +97,15 @@
           <tr>
             <th class="px-3 py-2 text-left">Connection ID</th>
             <th class="px-3 py-2 text-left">Server</th>
-            <th class="px-3 py-2 text-left">Flow Step</th>
+            <th class="px-3 py-2 text-left">
+              <div class="flex items-center gap-2">
+                <span>Flow Step</span>
+                <div class="inline-flex rounded border border-gray-300 dark:border-gray-600 overflow-hidden normal-case">
+                  <button type="button" data-std="SMART" onclick="switchStandard('SMART')" class="std-btn px-2 py-0.5 text-[11px] font-semibold transition">SMART</button>
+                  <button type="button" data-std="IUA" onclick="switchStandard('IUA')" class="std-btn px-2 py-0.5 text-[11px] font-semibold border-l border-gray-300 dark:border-gray-600 transition">IUA</button>
+                </div>
+              </div>
+            </th>
             <th class="px-3 py-2 text-left">Field</th>
             <th class="px-3 py-2 text-left">Location</th>
             <th class="px-3 py-2 text-center">Req</th>
@@ -168,6 +177,25 @@
     let debounceTimer = null;
     function debouncedReset() { clearTimeout(debounceTimer); debounceTimer = setTimeout(resetAndLoad, 400); }
 
+    let currentStandard = localStorage.getItem('resultsStandard') || 'SMART';
+    function renderStandardTabs() {
+      document.querySelectorAll('.std-btn').forEach(btn => {
+        const active = btn.dataset.std === currentStandard;
+        const border = btn.dataset.std === 'IUA' ? ' border-l border-gray-300 dark:border-gray-600' : '';
+        const activeColor = btn.dataset.std === 'IUA' ? 'bg-purple-600 text-white' : 'bg-blue-600 text-white';
+        btn.className = `std-btn px-2 py-0.5 text-[11px] font-semibold transition${border} ${active
+          ? activeColor
+          : 'bg-white dark:bg-gray-700 text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-600'}`;
+      });
+    }
+    function switchStandard(std) {
+      if (std === currentStandard) return;
+      currentStandard = std;
+      localStorage.setItem('resultsStandard', std);
+      renderStandardTabs();
+      resetAndLoad();
+    }
+
     function onShareTokenInput() {
       const active = document.getElementById('f-sharetoken').value.trim() !== '';
       const c = document.getElementById('secondary-filters');
@@ -207,6 +235,7 @@
         if (from) p.set('from', new Date(from).toISOString());
         if (to)   p.set('to',   new Date(to).toISOString());
       }
+      p.set('standard', currentStandard);
       p.set('limit', String(PAGE_SIZE)); p.set('offset', String(o)); return p;
     }
 
@@ -329,6 +358,7 @@
       ]);
       if (buResult?.baseUrl) { baseUrl = buResult.baseUrl; SHARE_URL_PREFIX = baseUrl + '/view/c/'; }
       if (ruResult?.rulesUpdatedAt) rulesUpdatedAt = ruResult.rulesUpdatedAt;
+      renderStandardTabs();
       resetAndLoad();
     }
     init();

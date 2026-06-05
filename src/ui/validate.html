@@ -3,6 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <link rel="icon" type="image/x-icon" href="favicon.ico">
   <title>Inspect — IUA/SMART Validator</title>
   <script>window.BASE_PATH='@@BASE_PATH@@';</script>
   <script>if(localStorage.getItem('darkMode')==='1')document.documentElement.classList.add('dark')</script>
@@ -88,6 +89,15 @@
             <span class="text-xs text-gray-500 dark:text-gray-400 w-28 flex-shrink-0">Overall</span>
             <div id="res-overall"></div>
           </div>
+        </div>
+      </div>
+
+      <!-- Standard toggle -->
+      <div class="flex items-center gap-2 mb-3">
+        <span class="text-xs text-gray-500 dark:text-gray-400">驗證標準</span>
+        <div class="inline-flex rounded-lg border border-gray-300 dark:border-gray-600 overflow-hidden">
+          <button type="button" data-std="SMART" onclick="selectStandard('SMART')" class="std-btn px-4 py-1.5 text-sm font-semibold transition">SMART</button>
+          <button type="button" data-std="IUA" onclick="selectStandard('IUA')" class="std-btn px-4 py-1.5 text-sm font-semibold border-l border-gray-300 dark:border-gray-600 transition">IUA</button>
         </div>
       </div>
 
@@ -259,8 +269,93 @@
       }
     }
 
+    let currentData = null;
+    let selectedStandard = localStorage.getItem('inspectStandard') || 'SMART';
+
+    function selectStandard(std) {
+      selectedStandard = std;
+      localStorage.setItem('inspectStandard', std);
+      if (currentData) renderStandardView();
+    }
+
+    function renderStandardTabs() {
+      document.querySelectorAll('.std-btn').forEach(btn => {
+        const active = btn.dataset.std === selectedStandard;
+        const base = 'std-btn px-4 py-1.5 text-sm font-semibold transition' + (btn.dataset.std === 'IUA' ? ' border-l border-gray-300 dark:border-gray-600' : '');
+        const activeColor = btn.dataset.std === 'IUA' ? ' bg-purple-600 text-white' : ' bg-blue-600 text-white';
+        btn.className = base + (active
+          ? activeColor
+          : ' bg-white dark:bg-gray-700 text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-600');
+      });
+    }
+
+    function renderStandardView() {
+      renderStandardTabs();
+      const validation = (currentData.validations || []).find(v => v.standard === selectedStandard)
+        || { flowStep: 'unknown', results: [] };
+      const results = validation.results || [];
+
+      // Flow Step + raw URL tooltip
+      document.getElementById('res-flow').textContent = validation.flowStep;
+      const urlTrigger = document.getElementById('req-url-tip-trigger');
+      if (currentData.reqUrl) {
+        urlTrigger.classList.remove('hidden');
+        urlTrigger.onmouseenter = e => { tipEl.textContent = currentData.reqUrl; tipEl.style.display = 'block'; moveTip(e); };
+        urlTrigger.onmousemove = moveTip;
+        urlTrigger.onmouseleave = () => { tipEl.style.display = 'none'; };
+      } else {
+        urlTrigger.classList.add('hidden');
+      }
+
+      // Overall status
+      const failCount = results.filter(r => r.status === 'FAIL').length;
+      const total = results.length;
+      const overallEl = document.getElementById('res-overall');
+      if (total === 0) {
+        overallEl.innerHTML = '<span class="px-2 py-0.5 rounded text-xs font-medium bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-400">—</span>';
+      } else if (failCount === 0) {
+        overallEl.innerHTML = '<span class="px-2 py-0.5 rounded text-xs font-medium bg-green-100 text-green-700 dark:bg-green-900/50 dark:text-green-300">PASS</span>';
+      } else {
+        overallEl.innerHTML = `<span class="px-2 py-0.5 rounded text-xs font-medium bg-red-100 text-red-700 dark:bg-red-900/50 dark:text-red-300">FAIL ${failCount}/${total}</span>`;
+      }
+
+      // Results table
+      const tbody = document.getElementById('res-body');
+      if (results.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="5" class="px-3 py-4 text-center text-gray-400 dark:text-gray-500">無欄位結果（unknown flow）</td></tr>';
+      } else {
+        tbody.innerHTML = results.map(r => {
+          const statusCell = `<div class="flex items-center gap-1">
+            <span class="flex-shrink-0 px-2 py-0.5 rounded text-xs font-medium ${STATUS_COLOR[r.status] || ''}">${escapeHtml(r.status)}</span>
+            ${detailIcon(r.detail)}
+          </div>`;
+
+          let valueInner = '';
+          if (r.value === undefined) {
+            valueInner = '<span class="text-gray-300 dark:text-gray-600 text-xs">—</span>';
+          } else if (r.value === '') {
+            valueInner = '<span class="text-red-500 dark:text-red-400 font-mono text-xs font-semibold italic">[Empty]</span>';
+          } else {
+            valueInner = `<button onclick="copyValueBtn(this)" data-copy="${escapeAttr(r.value)}"
+                class="flex-shrink-0 p-0.5 rounded text-gray-400 hover:text-gray-600 dark:text-gray-500 dark:hover:text-gray-300 transition-colors mt-0.5" title="複製">${COPY_SVG}</button>
+              <span class="font-mono text-xs text-gray-700 dark:text-gray-300 whitespace-nowrap">${escapeHtml(r.value)}</span>`;
+          }
+
+          return `
+          <tr class="hover:bg-gray-50 dark:hover:bg-gray-700">
+            <td class="px-3 py-2 font-mono font-semibold text-sm dark:text-gray-200">${escapeHtml(r.field)}</td>
+            <td class="px-3 py-2 text-xs text-gray-500 dark:text-gray-400 whitespace-nowrap">${escapeHtml(r.location)}</td>
+            <td class="px-3 py-2 text-center text-gray-600 dark:text-gray-400">${r.required ? '✓' : ''}</td>
+            <td class="px-3 py-2 whitespace-nowrap">${statusCell}</td>
+            <td class="px-3 py-2"><div class="flex items-center gap-1.5">${valueInner}</div></td>
+          </tr>`;
+        }).join('');
+      }
+    }
+
     function renderResult(data) {
       setLoading(false);
+      currentData = data;
 
       // Connection ID
       document.getElementById('res-id').textContent = data.connectionId;
@@ -290,65 +385,7 @@
         tokenRow.style.display = 'none';
       }
 
-      // Flow Step + raw URL tooltip
-      document.getElementById('res-flow').textContent = data.flowStep;
-      const urlTrigger = document.getElementById('req-url-tip-trigger');
-      if (data.reqUrl) {
-        urlTrigger.classList.remove('hidden');
-        urlTrigger.onmouseenter = e => { tipEl.textContent = data.reqUrl; tipEl.style.display = 'block'; moveTip(e); };
-        urlTrigger.onmousemove = moveTip;
-        urlTrigger.onmouseleave = () => { tipEl.style.display = 'none'; };
-      } else {
-        urlTrigger.classList.add('hidden');
-      }
-
-      // Overall status
-      const failCount = data.results.filter(r => r.status === 'FAIL').length;
-      const total = data.results.length;
-      const overallEl = document.getElementById('res-overall');
-      if (total === 0) {
-        overallEl.innerHTML = '<span class="px-2 py-0.5 rounded text-xs font-medium bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-400">—</span>';
-      } else if (failCount === 0) {
-        overallEl.innerHTML = '<span class="px-2 py-0.5 rounded text-xs font-medium bg-green-100 text-green-700 dark:bg-green-900/50 dark:text-green-300">PASS</span>';
-      } else {
-        overallEl.innerHTML = `<span class="px-2 py-0.5 rounded text-xs font-medium bg-red-100 text-red-700 dark:bg-red-900/50 dark:text-red-300">FAIL ${failCount}/${total}</span>`;
-      }
-
-      // Results table
-      const tbody = document.getElementById('res-body');
-      if (data.results.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="5" class="px-3 py-4 text-center text-gray-400 dark:text-gray-500">無欄位結果（unknown flow）</td></tr>';
-      } else {
-        tbody.innerHTML = data.results.map(r => {
-          // Status + detail icon
-          const statusCell = `<div class="flex items-center gap-1">
-            <span class="flex-shrink-0 px-2 py-0.5 rounded text-xs font-medium ${STATUS_COLOR[r.status] || ''}">${escapeHtml(r.status)}</span>
-            ${detailIcon(r.detail)}
-          </div>`;
-
-          // Value cell
-          let valueInner = '';
-          if (r.value === undefined) {
-            valueInner = '<span class="text-gray-300 dark:text-gray-600 text-xs">—</span>';
-          } else if (r.value === '') {
-            valueInner = '<span class="text-red-500 dark:text-red-400 font-mono text-xs font-semibold italic">[Empty]</span>';
-          } else {
-            valueInner = `<button onclick="copyValueBtn(this)" data-copy="${escapeAttr(r.value)}"
-                class="flex-shrink-0 p-0.5 rounded text-gray-400 hover:text-gray-600 dark:text-gray-500 dark:hover:text-gray-300 transition-colors mt-0.5" title="複製">${COPY_SVG}</button>
-              <span class="font-mono text-xs text-gray-700 dark:text-gray-300 whitespace-nowrap">${escapeHtml(r.value)}</span>`;
-          }
-
-          return `
-          <tr class="hover:bg-gray-50 dark:hover:bg-gray-700">
-            <td class="px-3 py-2 font-mono font-semibold text-sm dark:text-gray-200">${escapeHtml(r.field)}</td>
-            <td class="px-3 py-2 text-xs text-gray-500 dark:text-gray-400 whitespace-nowrap">${escapeHtml(r.location)}</td>
-            <td class="px-3 py-2 text-center text-gray-600 dark:text-gray-400">${r.required ? '✓' : ''}</td>
-            <td class="px-3 py-2 whitespace-nowrap">${statusCell}</td>
-            <td class="px-3 py-2"><div class="flex items-center gap-1.5">${valueInner}</div></td>
-          </tr>`;
-        }).join('');
-      }
-
+      renderStandardView();
       document.getElementById('result-section').classList.remove('hidden');
     }
 

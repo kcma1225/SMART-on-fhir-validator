@@ -16,6 +16,15 @@ function matches(conn: PrismConnection, rule: FlowRule): boolean {
 
   if (!conn.req_url.includes(identify.url_contains)) return false;
 
+  // A .well-known discovery document (e.g. /fhir/.well-known/smart-configuration)
+  // is never a resource/auth request — it must only match a metadata-style rule
+  // whose url_contains itself targets .well-known. This stops the broad `/fhir`
+  // rule from greedily claiming discovery docs (notably for IUA, which has no
+  // metadata flow), which would otherwise produce a misleading Authorization FAIL.
+  if (conn.req_url.includes('/.well-known/') && !identify.url_contains.includes('.well-known')) {
+    return false;
+  }
+
   if (identify.body_contains) {
     const body = parseBody(conn.req_body);
     for (const [key, value] of Object.entries(identify.body_contains)) {

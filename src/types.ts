@@ -1,5 +1,9 @@
 export type FlowStep = string;
 
+export type Standard = 'SMART' | 'IUA';
+
+export const STANDARDS: Standard[] = ['SMART', 'IUA'];
+
 export type FieldStatus = 'PASS' | 'FAIL' | 'SKIP';
 
 export type FieldLocation = 'query_params' | 'body_params' | 'headers' | 'response_body';
@@ -25,13 +29,18 @@ export interface FieldResult {
   value?: string; // undefined = field absent; "" = key present but empty
 }
 
+export interface StandardValidation {
+  standard: Standard;
+  flowStep: FlowStep;
+  results: FieldResult[];
+}
+
 export interface ValidationOutput {
   connectionId: string;
   userId: number | null;
   serverId: string | null;
   serverName: string | null;
-  flowStep: FlowStep;
-  results: FieldResult[];
+  validations: StandardValidation[];
 }
 
 export interface CheckFields {

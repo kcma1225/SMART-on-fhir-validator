@@ -1,8 +1,9 @@
 import { getPrismaClient } from './db/validator';
 import { touchRulesUpdatedAt } from './settings';
-import type { RulesConfig, FlowRule } from './types';
+import { STANDARDS } from './types';
+import type { RulesConfig, FlowRule, Standard } from './types';
 
-let cachedRules: RulesConfig | null = null;
+let cachedRules: Map<Standard, RulesConfig> = new Map();
 
 const FIELD_LOCATIONS = ['query_params', 'body_params', 'headers', 'response_body'];
 const FIELD_TYPES = ['required', 'conditional', 'optional', 'forbidden'];
@@ -15,7 +16,12 @@ const FLOW_ORDER = [
   'token_request_refresh',
 ];
 
+function isStandard(value: string): value is Standard {
+  return (STANDARDS as string[]).includes(value);
+}
+
 export interface RuleFieldInput {
+  standard: string;
   flowStep: string;
   fieldName: string;
   fieldLocation: string;
@@ -34,64 +40,109 @@ export interface FlowIdentifierInput {
 // ── Default seed data ────────────────────────────────────────────────────────
 
 const DEFAULT_IDENTIFIERS = [
-  { flowStep: 'smart_metadata',            description: 'SMART 服務聲明 Metadata 請求 (Step 70)',                                  method: 'GET',  urlContains: '/.well-known/smart-configuration',       bodyGrantType: null,                 priority: 1 },
-  { flowStep: 'authorization_request',     description: 'OAuth Authorization Endpoint 請求 (AppLaunch Step 200)',                  method: 'GET',  urlContains: '/protocol/openid-connect/auth',          bodyGrantType: null,                 priority: 2 },
-  { flowStep: 'token_request_auth_code',   description: 'Token Endpoint 請求 — Authorization Code Flow (AppLaunch Step 210)',       method: 'POST', urlContains: '/protocol/openid-connect/token',         bodyGrantType: 'authorization_code', priority: 3 },
-  { flowStep: 'token_request_client_cred', description: 'Token Endpoint 請求 — Client Credentials Flow (BackendServices Step 200)', method: 'POST', urlContains: '/protocol/openid-connect/token',         bodyGrantType: 'client_credentials', priority: 4 },
-  { flowStep: 'fhir_request',              description: 'FHIR Resource 存取請求 (Step 300)',                                       method: '*',    urlContains: '/fhir',                                  bodyGrantType: null,                 priority: 5 },
-  { flowStep: 'token_request_refresh',     description: 'Token Endpoint 請求 — Refresh Token Flow (AppLaunch Step 310)',            method: 'POST', urlContains: '/protocol/openid-connect/token',         bodyGrantType: 'refresh_token',      priority: 6 },
+  // ── SMART ──────────────────────────────────────────────────────────────────
+  { standard: 'SMART', flowStep: 'smart_metadata',            description: 'SMART 服務聲明 Metadata 請求 (Step 70)',                                  method: 'GET',  urlContains: '/.well-known/smart-configuration', bodyGrantType: null,                 priority: 1 },
+  { standard: 'SMART', flowStep: 'authorization_request',     description: 'OAuth Authorization Endpoint 請求 (AppLaunch Step 200)',                  method: 'GET',  urlContains: '/protocol/openid-connect/auth',    bodyGrantType: null,                 priority: 2 },
+  { standard: 'SMART', flowStep: 'token_request_auth_code',   description: 'Token Endpoint 請求 — Authorization Code Flow (AppLaunch Step 210)',       method: 'POST', urlContains: '/protocol/openid-connect/token',   bodyGrantType: 'authorization_code', priority: 3 },
+  { standard: 'SMART', flowStep: 'token_request_client_cred', description: 'Token Endpoint 請求 — Client Credentials Flow (BackendServices Step 200)', method: 'POST', urlContains: '/protocol/openid-connect/token',   bodyGrantType: 'client_credentials', priority: 4 },
+  { standard: 'SMART', flowStep: 'fhir_request',              description: 'FHIR Resource 存取請求 (Step 300)',                                       method: '*',    urlContains: '/fhir',                            bodyGrantType: null,                 priority: 5 },
+  { standard: 'SMART', flowStep: 'token_request_refresh',     description: 'Token Endpoint 請求 — Refresh Token Flow (AppLaunch Step 310)',            method: 'POST', urlContains: '/protocol/openid-connect/token',   bodyGrantType: 'refresh_token',      priority: 6 },
+
+  // ── IUA (no metadata discovery step) ────────────────────────────────────────
+  { standard: 'IUA', flowStep: 'authorization_request',     description: 'IUA OAuth Authorization Endpoint 請求',                method: 'GET',  urlContains: '/protocol/openid-connect/auth',  bodyGrantType: null,                 priority: 1 },
+  { standard: 'IUA', flowStep: 'token_request_auth_code',   description: 'IUA Token Endpoint 請求 — Authorization Code Flow',     method: 'POST', urlContains: '/protocol/openid-connect/token', bodyGrantType: 'authorization_code', priority: 2 },
+  { standard: 'IUA', flowStep: 'token_request_client_cred', description: 'IUA Token Endpoint 請求 — Client Credentials Flow',     method: 'POST', urlContains: '/protocol/openid-connect/token', bodyGrantType: 'client_credentials', priority: 3 },
+  { standard: 'IUA', flowStep: 'fhir_request',              description: 'IUA FHIR Resource 存取請求',                           method: '*',    urlContains: '/fhir',                          bodyGrantType: null,                 priority: 4 },
+  { standard: 'IUA', flowStep: 'token_request_refresh',     description: 'IUA Token Endpoint 請求 — Refresh Token Flow',          method: 'POST', urlContains: '/protocol/openid-connect/token', bodyGrantType: 'refresh_token',      priority: 5 },
 ];
 
 const DEFAULT_FIELDS = [
+  // ════════════════════════════════════════════════════════════════════════════
+  // SMART
+  // ════════════════════════════════════════════════════════════════════════════
   // smart_metadata — response_body
-  { flowStep: 'smart_metadata', fieldName: 'grant_types_supported',            fieldLocation: 'response_body', fieldType: 'required',    pattern: null, sortOrder: 0 },
-  { flowStep: 'smart_metadata', fieldName: 'token_endpoint',                   fieldLocation: 'response_body', fieldType: 'required',    pattern: null, sortOrder: 1 },
-  { flowStep: 'smart_metadata', fieldName: 'capabilities',                     fieldLocation: 'response_body', fieldType: 'required',    pattern: null, sortOrder: 2 },
-  { flowStep: 'smart_metadata', fieldName: 'code_challenge_methods_supported', fieldLocation: 'response_body', fieldType: 'required',    pattern: null, sortOrder: 3 },
-  { flowStep: 'smart_metadata', fieldName: 'issuer',                           fieldLocation: 'response_body', fieldType: 'conditional', pattern: null, sortOrder: 4 },
-  { flowStep: 'smart_metadata', fieldName: 'jwks_uri',                         fieldLocation: 'response_body', fieldType: 'conditional', pattern: null, sortOrder: 5 },
-  { flowStep: 'smart_metadata', fieldName: 'authorization_endpoint',           fieldLocation: 'response_body', fieldType: 'conditional', pattern: null, sortOrder: 6 },
-  { flowStep: 'smart_metadata', fieldName: 'token_endpoint_auth_methods_supported', fieldLocation: 'response_body', fieldType: 'optional', pattern: null, sortOrder: 7 },
-  { flowStep: 'smart_metadata', fieldName: 'registration_endpoint',            fieldLocation: 'response_body', fieldType: 'optional',    pattern: null, sortOrder: 8 },
-  { flowStep: 'smart_metadata', fieldName: 'introspection_endpoint',           fieldLocation: 'response_body', fieldType: 'optional',    pattern: null, sortOrder: 9 },
-  { flowStep: 'smart_metadata', fieldName: 'revocation_endpoint',              fieldLocation: 'response_body', fieldType: 'optional',    pattern: null, sortOrder: 10 },
-  { flowStep: 'smart_metadata', fieldName: 'scopes_supported',                 fieldLocation: 'response_body', fieldType: 'optional',    pattern: null, sortOrder: 11 },
-  { flowStep: 'smart_metadata', fieldName: 'response_types_supported',         fieldLocation: 'response_body', fieldType: 'optional',    pattern: null, sortOrder: 12 },
+  { standard: 'SMART', flowStep: 'smart_metadata', fieldName: 'grant_types_supported',            fieldLocation: 'response_body', fieldType: 'required',    pattern: null, sortOrder: 0 },
+  { standard: 'SMART', flowStep: 'smart_metadata', fieldName: 'token_endpoint',                   fieldLocation: 'response_body', fieldType: 'required',    pattern: null, sortOrder: 1 },
+  { standard: 'SMART', flowStep: 'smart_metadata', fieldName: 'capabilities',                     fieldLocation: 'response_body', fieldType: 'required',    pattern: null, sortOrder: 2 },
+  { standard: 'SMART', flowStep: 'smart_metadata', fieldName: 'code_challenge_methods_supported', fieldLocation: 'response_body', fieldType: 'required',    pattern: null, sortOrder: 3 },
+  { standard: 'SMART', flowStep: 'smart_metadata', fieldName: 'issuer',                           fieldLocation: 'response_body', fieldType: 'conditional', pattern: null, sortOrder: 4 },
+  { standard: 'SMART', flowStep: 'smart_metadata', fieldName: 'jwks_uri',                         fieldLocation: 'response_body', fieldType: 'conditional', pattern: null, sortOrder: 5 },
+  { standard: 'SMART', flowStep: 'smart_metadata', fieldName: 'authorization_endpoint',           fieldLocation: 'response_body', fieldType: 'conditional', pattern: null, sortOrder: 6 },
+  { standard: 'SMART', flowStep: 'smart_metadata', fieldName: 'token_endpoint_auth_methods_supported', fieldLocation: 'response_body', fieldType: 'optional', pattern: null, sortOrder: 7 },
+  { standard: 'SMART', flowStep: 'smart_metadata', fieldName: 'registration_endpoint',            fieldLocation: 'response_body', fieldType: 'optional',    pattern: null, sortOrder: 8 },
+  { standard: 'SMART', flowStep: 'smart_metadata', fieldName: 'introspection_endpoint',           fieldLocation: 'response_body', fieldType: 'optional',    pattern: null, sortOrder: 9 },
+  { standard: 'SMART', flowStep: 'smart_metadata', fieldName: 'revocation_endpoint',              fieldLocation: 'response_body', fieldType: 'optional',    pattern: null, sortOrder: 10 },
+  { standard: 'SMART', flowStep: 'smart_metadata', fieldName: 'scopes_supported',                 fieldLocation: 'response_body', fieldType: 'optional',    pattern: null, sortOrder: 11 },
+  { standard: 'SMART', flowStep: 'smart_metadata', fieldName: 'response_types_supported',         fieldLocation: 'response_body', fieldType: 'optional',    pattern: null, sortOrder: 12 },
 
   // token_request_refresh — body_params
-  { flowStep: 'token_request_refresh', fieldName: 'grant_type',    fieldLocation: 'body_params', fieldType: 'required', pattern: null, sortOrder: 0 },
-  { flowStep: 'token_request_refresh', fieldName: 'refresh_token', fieldLocation: 'body_params', fieldType: 'required', pattern: null, sortOrder: 1 },
-  { flowStep: 'token_request_refresh', fieldName: 'scope',         fieldLocation: 'body_params', fieldType: 'optional', pattern: null, sortOrder: 2 },
+  { standard: 'SMART', flowStep: 'token_request_refresh', fieldName: 'grant_type',    fieldLocation: 'body_params', fieldType: 'required', pattern: null, sortOrder: 0 },
+  { standard: 'SMART', flowStep: 'token_request_refresh', fieldName: 'refresh_token', fieldLocation: 'body_params', fieldType: 'required', pattern: null, sortOrder: 1 },
+  { standard: 'SMART', flowStep: 'token_request_refresh', fieldName: 'scope',         fieldLocation: 'body_params', fieldType: 'optional', pattern: null, sortOrder: 2 },
 
   // token_request_client_cred — body_params
-  { flowStep: 'token_request_client_cred', fieldName: 'grant_type',            fieldLocation: 'body_params', fieldType: 'required', pattern: null, sortOrder: 0 },
-  { flowStep: 'token_request_client_cred', fieldName: 'scope',                 fieldLocation: 'body_params', fieldType: 'required', pattern: null, sortOrder: 1 },
-  { flowStep: 'token_request_client_cred', fieldName: 'client_assertion_type', fieldLocation: 'body_params', fieldType: 'required', pattern: null, sortOrder: 2 },
-  { flowStep: 'token_request_client_cred', fieldName: 'client_assertion',      fieldLocation: 'body_params', fieldType: 'required', pattern: null, sortOrder: 3 },
+  { standard: 'SMART', flowStep: 'token_request_client_cred', fieldName: 'grant_type',            fieldLocation: 'body_params', fieldType: 'required', pattern: null, sortOrder: 0 },
+  { standard: 'SMART', flowStep: 'token_request_client_cred', fieldName: 'scope',                 fieldLocation: 'body_params', fieldType: 'required', pattern: null, sortOrder: 1 },
+  { standard: 'SMART', flowStep: 'token_request_client_cred', fieldName: 'client_assertion_type', fieldLocation: 'body_params', fieldType: 'required', pattern: null, sortOrder: 2 },
+  { standard: 'SMART', flowStep: 'token_request_client_cred', fieldName: 'client_assertion',      fieldLocation: 'body_params', fieldType: 'required', pattern: null, sortOrder: 3 },
 
   // token_request_auth_code — body_params
-  { flowStep: 'token_request_auth_code', fieldName: 'grant_type',   fieldLocation: 'body_params', fieldType: 'required', pattern: null, sortOrder: 0 },
-  { flowStep: 'token_request_auth_code', fieldName: 'code',         fieldLocation: 'body_params', fieldType: 'required', pattern: null, sortOrder: 1 },
-  { flowStep: 'token_request_auth_code', fieldName: 'redirect_uri', fieldLocation: 'body_params', fieldType: 'required', pattern: null, sortOrder: 2 },
-  { flowStep: 'token_request_auth_code', fieldName: 'code_verifier',fieldLocation: 'body_params', fieldType: 'required', pattern: null, sortOrder: 3 },
-  { flowStep: 'token_request_auth_code', fieldName: 'client_id',    fieldLocation: 'body_params', fieldType: 'optional', pattern: null, sortOrder: 4 },
+  { standard: 'SMART', flowStep: 'token_request_auth_code', fieldName: 'grant_type',   fieldLocation: 'body_params', fieldType: 'required', pattern: null, sortOrder: 0 },
+  { standard: 'SMART', flowStep: 'token_request_auth_code', fieldName: 'code',         fieldLocation: 'body_params', fieldType: 'required', pattern: null, sortOrder: 1 },
+  { standard: 'SMART', flowStep: 'token_request_auth_code', fieldName: 'redirect_uri', fieldLocation: 'body_params', fieldType: 'required', pattern: null, sortOrder: 2 },
+  { standard: 'SMART', flowStep: 'token_request_auth_code', fieldName: 'code_verifier',fieldLocation: 'body_params', fieldType: 'required', pattern: null, sortOrder: 3 },
+  { standard: 'SMART', flowStep: 'token_request_auth_code', fieldName: 'client_id',    fieldLocation: 'body_params', fieldType: 'optional', pattern: null, sortOrder: 4 },
 
   // authorization_request — query_params
-  { flowStep: 'authorization_request', fieldName: 'response_type',        fieldLocation: 'query_params', fieldType: 'required', pattern: null, sortOrder: 0 },
-  { flowStep: 'authorization_request', fieldName: 'client_id',            fieldLocation: 'query_params', fieldType: 'required', pattern: null, sortOrder: 1 },
-  { flowStep: 'authorization_request', fieldName: 'redirect_uri',         fieldLocation: 'query_params', fieldType: 'required', pattern: null, sortOrder: 2 },
-  { flowStep: 'authorization_request', fieldName: 'scope',                fieldLocation: 'query_params', fieldType: 'required', pattern: null, sortOrder: 3 },
-  { flowStep: 'authorization_request', fieldName: 'state',                fieldLocation: 'query_params', fieldType: 'required', pattern: null, sortOrder: 4 },
-  { flowStep: 'authorization_request', fieldName: 'aud',                  fieldLocation: 'query_params', fieldType: 'required', pattern: null, sortOrder: 5 },
-  { flowStep: 'authorization_request', fieldName: 'code_challenge',       fieldLocation: 'query_params', fieldType: 'required', pattern: null, sortOrder: 6 },
-  { flowStep: 'authorization_request', fieldName: 'code_challenge_method',fieldLocation: 'query_params', fieldType: 'required', pattern: null, sortOrder: 7 },
-  { flowStep: 'authorization_request', fieldName: 'launch',               fieldLocation: 'query_params', fieldType: 'optional', pattern: null, sortOrder: 8 },
+  { standard: 'SMART', flowStep: 'authorization_request', fieldName: 'response_type',        fieldLocation: 'query_params', fieldType: 'required', pattern: null, sortOrder: 0 },
+  { standard: 'SMART', flowStep: 'authorization_request', fieldName: 'client_id',            fieldLocation: 'query_params', fieldType: 'required', pattern: null, sortOrder: 1 },
+  { standard: 'SMART', flowStep: 'authorization_request', fieldName: 'redirect_uri',         fieldLocation: 'query_params', fieldType: 'required', pattern: null, sortOrder: 2 },
+  { standard: 'SMART', flowStep: 'authorization_request', fieldName: 'scope',                fieldLocation: 'query_params', fieldType: 'required', pattern: null, sortOrder: 3 },
+  { standard: 'SMART', flowStep: 'authorization_request', fieldName: 'state',                fieldLocation: 'query_params', fieldType: 'required', pattern: null, sortOrder: 4 },
+  { standard: 'SMART', flowStep: 'authorization_request', fieldName: 'aud',                  fieldLocation: 'query_params', fieldType: 'required', pattern: null, sortOrder: 5 },
+  { standard: 'SMART', flowStep: 'authorization_request', fieldName: 'code_challenge',       fieldLocation: 'query_params', fieldType: 'required', pattern: null, sortOrder: 6 },
+  { standard: 'SMART', flowStep: 'authorization_request', fieldName: 'code_challenge_method',fieldLocation: 'query_params', fieldType: 'required', pattern: null, sortOrder: 7 },
+  { standard: 'SMART', flowStep: 'authorization_request', fieldName: 'launch',               fieldLocation: 'query_params', fieldType: 'optional', pattern: null, sortOrder: 8 },
 
   // fhir_request — headers
-  { flowStep: 'fhir_request', fieldName: 'Authorization', fieldLocation: 'headers', fieldType: 'required', pattern: '^Bearer .+', sortOrder: 0 },
+  { standard: 'SMART', flowStep: 'fhir_request', fieldName: 'Authorization', fieldLocation: 'headers', fieldType: 'required', pattern: '^Bearer .+', sortOrder: 0 },
+
+  // ════════════════════════════════════════════════════════════════════════════
+  // IUA — derived from the IUA vs SMART parameter diff
+  // ════════════════════════════════════════════════════════════════════════════
+  // authorization_request — query_params (no PKCE / aud / launch in IUA)
+  { standard: 'IUA', flowStep: 'authorization_request', fieldName: 'response_type', fieldLocation: 'query_params', fieldType: 'required', pattern: null, sortOrder: 0 },
+  { standard: 'IUA', flowStep: 'authorization_request', fieldName: 'client_id',     fieldLocation: 'query_params', fieldType: 'required', pattern: null, sortOrder: 1 },
+  { standard: 'IUA', flowStep: 'authorization_request', fieldName: 'redirect_uri',  fieldLocation: 'query_params', fieldType: 'required', pattern: null, sortOrder: 2 },
+  { standard: 'IUA', flowStep: 'authorization_request', fieldName: 'scope',         fieldLocation: 'query_params', fieldType: 'required', pattern: null, sortOrder: 3 },
+  { standard: 'IUA', flowStep: 'authorization_request', fieldName: 'state',         fieldLocation: 'query_params', fieldType: 'required', pattern: null, sortOrder: 4 },
+
+  // token_request_auth_code — headers + body_params (no code_verifier/PKCE in IUA)
+  { standard: 'IUA', flowStep: 'token_request_auth_code', fieldName: 'Content-Type',  fieldLocation: 'headers',     fieldType: 'required',    pattern: null,      sortOrder: 0 },
+  { standard: 'IUA', flowStep: 'token_request_auth_code', fieldName: 'Authorization', fieldLocation: 'headers',     fieldType: 'conditional', pattern: '^Basic ', sortOrder: 1 },
+  { standard: 'IUA', flowStep: 'token_request_auth_code', fieldName: 'grant_type',    fieldLocation: 'body_params', fieldType: 'required',    pattern: null,      sortOrder: 0 },
+  { standard: 'IUA', flowStep: 'token_request_auth_code', fieldName: 'code',          fieldLocation: 'body_params', fieldType: 'required',    pattern: null,      sortOrder: 1 },
+  { standard: 'IUA', flowStep: 'token_request_auth_code', fieldName: 'redirect_uri',  fieldLocation: 'body_params', fieldType: 'required',    pattern: null,      sortOrder: 2 },
+  { standard: 'IUA', flowStep: 'token_request_auth_code', fieldName: 'client_id',     fieldLocation: 'body_params', fieldType: 'conditional', pattern: null,      sortOrder: 3 },
+
+  // token_request_client_cred — headers + body_params (Basic auth, no client_assertion in IUA)
+  { standard: 'IUA', flowStep: 'token_request_client_cred', fieldName: 'Content-Type',  fieldLocation: 'headers',     fieldType: 'required', pattern: null,      sortOrder: 0 },
+  { standard: 'IUA', flowStep: 'token_request_client_cred', fieldName: 'Authorization', fieldLocation: 'headers',     fieldType: 'required', pattern: '^Basic ', sortOrder: 1 },
+  { standard: 'IUA', flowStep: 'token_request_client_cred', fieldName: 'grant_type',    fieldLocation: 'body_params', fieldType: 'required', pattern: null,      sortOrder: 0 },
+  { standard: 'IUA', flowStep: 'token_request_client_cred', fieldName: 'scope',         fieldLocation: 'body_params', fieldType: 'required', pattern: null,      sortOrder: 1 },
+
+  // token_request_refresh — headers + body_params
+  { standard: 'IUA', flowStep: 'token_request_refresh', fieldName: 'Content-Type',  fieldLocation: 'headers',     fieldType: 'required', pattern: null, sortOrder: 0 },
+  { standard: 'IUA', flowStep: 'token_request_refresh', fieldName: 'grant_type',    fieldLocation: 'body_params', fieldType: 'required', pattern: null, sortOrder: 0 },
+  { standard: 'IUA', flowStep: 'token_request_refresh', fieldName: 'refresh_token', fieldLocation: 'body_params', fieldType: 'required', pattern: null, sortOrder: 1 },
+  { standard: 'IUA', flowStep: 'token_request_refresh', fieldName: 'scope',         fieldLocation: 'body_params', fieldType: 'optional', pattern: null, sortOrder: 2 },
+
+  // fhir_request — headers
+  { standard: 'IUA', flowStep: 'fhir_request', fieldName: 'Authorization', fieldLocation: 'headers', fieldType: 'required', pattern: '^Bearer .+', sortOrder: 0 },
 ];
 
 function normalizeRuleFieldInput(input: RuleFieldInput): RuleFieldInput {
+  const standard = input.standard?.trim();
   const flowStep = input.flowStep.trim();
   const fieldName = input.fieldName.trim();
   const fieldLocation = input.fieldLocation.trim();
@@ -99,13 +150,14 @@ function normalizeRuleFieldInput(input: RuleFieldInput): RuleFieldInput {
   const pattern = input.pattern?.trim() || null;
   const sortOrder = Number(input.sortOrder ?? 0);
 
+  if (!standard || !isStandard(standard)) throw new Error('invalid standard');
   if (!flowStep) throw new Error('flowStep required');
   if (!fieldName) throw new Error('fieldName required');
   if (!FIELD_LOCATIONS.includes(fieldLocation)) throw new Error('invalid fieldLocation');
   if (!FIELD_TYPES.includes(fieldType)) throw new Error('invalid fieldType');
   if (!Number.isFinite(sortOrder)) throw new Error('invalid sortOrder');
 
-  return { flowStep, fieldName, fieldLocation, fieldType, pattern, sortOrder };
+  return { standard, flowStep, fieldName, fieldLocation, fieldType, pattern, sortOrder };
 }
 
 function normalizeFlowIdentifierInput(input: FlowIdentifierInput): FlowIdentifierInput {
@@ -123,11 +175,11 @@ function normalizeFlowIdentifierInput(input: FlowIdentifierInput): FlowIdentifie
 
 // ── Build RulesConfig from DB rows ───────────────────────────────────────────
 
-async function buildRulesConfig(): Promise<RulesConfig> {
+async function buildRulesConfigFor(standard: Standard): Promise<RulesConfig> {
   const prisma = getPrismaClient();
   const [identifiers, fields] = await Promise.all([
-    prisma.flowIdentifier.findMany({ orderBy: { priority: 'asc' } }),
-    prisma.flowRuleField.findMany({ orderBy: { sortOrder: 'asc' } }),
+    prisma.flowIdentifier.findMany({ where: { standard }, orderBy: { priority: 'asc' } }),
+    prisma.flowRuleField.findMany({ where: { standard }, orderBy: { sortOrder: 'asc' } }),
   ]);
 
   const flows: Record<string, FlowRule> = {};
@@ -173,6 +225,14 @@ async function buildRulesConfig(): Promise<RulesConfig> {
   return { flows };
 }
 
+async function buildAllRules(): Promise<Map<Standard, RulesConfig>> {
+  const map = new Map<Standard, RulesConfig>();
+  for (const standard of STANDARDS) {
+    map.set(standard, await buildRulesConfigFor(standard));
+  }
+  return map;
+}
+
 // ── Public API ────────────────────────────────────────────────────────────────
 
 export async function initRules(): Promise<void> {
@@ -184,35 +244,37 @@ export async function initRules(): Promise<void> {
       await prisma.flowIdentifier.create({ data: ident });
     }
     await prisma.flowRuleField.createMany({ data: DEFAULT_FIELDS });
-    console.log('[rules-db] seeded default rules');
+    console.log('[rules-db] seeded default rules (SMART + IUA)');
   } else {
     await Promise.all(
       DEFAULT_IDENTIFIERS.map(ident => prisma.flowIdentifier.updateMany({
-        where: { flowStep: ident.flowStep },
+        where: { standard: ident.standard, flowStep: ident.flowStep },
         data: { priority: ident.priority },
       })),
     );
   }
 
-  cachedRules = await buildRulesConfig();
+  cachedRules = await buildAllRules();
   console.log('[rules-db] rules loaded from DB');
 }
 
-export function getCachedRules(): RulesConfig {
-  if (!cachedRules) throw new Error('Rules not initialized — call initRules() first');
+export function getCachedRules(standard: Standard): RulesConfig {
+  const rules = cachedRules.get(standard);
+  if (!rules) throw new Error(`Rules not initialized for standard ${standard} — call initRules() first`);
+  return rules;
+}
+
+export async function reloadRulesFromDb(): Promise<Map<Standard, RulesConfig>> {
+  cachedRules = await buildAllRules();
   return cachedRules;
 }
 
-export async function reloadRulesFromDb(): Promise<RulesConfig> {
-  cachedRules = await buildRulesConfig();
-  return cachedRules;
-}
-
-export async function listRuleDefinitions(): Promise<{ flows: unknown[]; fields: unknown[] }> {
+export async function listRuleDefinitions(standard: Standard): Promise<{ flows: unknown[]; fields: unknown[] }> {
   const prisma = getPrismaClient();
   const [flows, fields] = await Promise.all([
-    prisma.flowIdentifier.findMany({ orderBy: { priority: 'asc' } }),
+    prisma.flowIdentifier.findMany({ where: { standard }, orderBy: { priority: 'asc' } }),
     prisma.flowRuleField.findMany({
+      where: { standard },
       orderBy: [
         { fieldLocation: 'asc' },
         { sortOrder: 'asc' },
@@ -242,7 +304,9 @@ export async function listRuleDefinitions(): Promise<{ flows: unknown[]; fields:
 export async function createRuleField(input: RuleFieldInput): Promise<unknown> {
   const data = normalizeRuleFieldInput(input);
   const prisma = getPrismaClient();
-  const flow = await prisma.flowIdentifier.findUnique({ where: { flowStep: data.flowStep } });
+  const flow = await prisma.flowIdentifier.findUnique({
+    where: { standard_flowStep: { standard: data.standard, flowStep: data.flowStep } },
+  });
   if (!flow) throw new Error('flowStep not found');
 
   const field = await prisma.flowRuleField.create({ data });
@@ -253,7 +317,9 @@ export async function createRuleField(input: RuleFieldInput): Promise<unknown> {
 export async function updateRuleField(id: string, input: RuleFieldInput): Promise<unknown> {
   const data = normalizeRuleFieldInput(input);
   const prisma = getPrismaClient();
-  const flow = await prisma.flowIdentifier.findUnique({ where: { flowStep: data.flowStep } });
+  const flow = await prisma.flowIdentifier.findUnique({
+    where: { standard_flowStep: { standard: data.standard, flowStep: data.flowStep } },
+  });
   if (!flow) throw new Error('flowStep not found');
 
   const field = await prisma.flowRuleField.update({ where: { id }, data });
@@ -267,10 +333,14 @@ export async function deleteRuleField(id: string): Promise<void> {
   await Promise.all([reloadRulesFromDb(), touchRulesUpdatedAt()]);
 }
 
-export async function updateFlowIdentifier(flowStep: string, input: FlowIdentifierInput): Promise<unknown> {
+export async function updateFlowIdentifier(standard: string, flowStep: string, input: FlowIdentifierInput): Promise<unknown> {
+  if (!isStandard(standard)) throw new Error('invalid standard');
   const data = normalizeFlowIdentifierInput(input);
   const prisma = getPrismaClient();
-  const flow = await prisma.flowIdentifier.update({ where: { flowStep }, data });
+  const flow = await prisma.flowIdentifier.update({
+    where: { standard_flowStep: { standard, flowStep } },
+    data,
+  });
   await Promise.all([reloadRulesFromDb(), touchRulesUpdatedAt()]);
   return flow;
 }

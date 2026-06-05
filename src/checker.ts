@@ -151,9 +151,9 @@ function checkHeaderFields(
 ): FieldResult[] {
   const results: FieldResult[] = [];
 
+  // required: absent → FAIL; present → optional pattern check
   for (const field of def.required ?? []) {
-    const lowerField = field.toLowerCase();
-    const value = headers[lowerField];
+    const value = headers[field.toLowerCase()];
 
     if (value === undefined) {
       results.push({
@@ -167,30 +167,42 @@ function checkHeaderFields(
     }
 
     const pattern = def.patterns?.[field];
-    if (pattern) {
-      const ok = new RegExp(pattern).test(value);
+    if (pattern && !new RegExp(pattern).test(value)) {
       results.push({
         field,
         location: 'headers',
         required: true,
-        status: ok ? 'PASS' : 'FAIL',
+        status: 'FAIL',
         value,
-        ...(ok ? {} : { detail: `header present but does not match pattern ${pattern}` }),
+        detail: `header present but does not match pattern ${pattern}`,
       });
     } else {
       results.push({ field, location: 'headers', required: true, status: 'PASS', value });
     }
   }
 
-  for (const field of def.optional ?? []) {
-    const v = headers[field.toLowerCase()];
-    results.push({
-      field,
-      location: 'headers',
-      required: false,
-      status: v !== undefined ? 'PASS' : 'SKIP',
-      ...(v !== undefined ? { value: v } : {}),
-    });
+  // conditional / optional: absent → SKIP; present → optional pattern check
+  for (const field of [...(def.optional ?? []), ...(def.conditional ?? [])]) {
+    const value = headers[field.toLowerCase()];
+
+    if (value === undefined) {
+      results.push({ field, location: 'headers', required: false, status: 'SKIP' });
+      continue;
+    }
+
+    const pattern = def.patterns?.[field];
+    if (pattern && !new RegExp(pattern).test(value)) {
+      results.push({
+        field,
+        location: 'headers',
+        required: false,
+        status: 'FAIL',
+        value,
+        detail: `header present but does not match pattern ${pattern}`,
+      });
+    } else {
+      results.push({ field, location: 'headers', required: false, status: 'PASS', value });
+    }
   }
 
   for (const field of def.forbidden ?? []) {

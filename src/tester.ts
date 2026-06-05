@@ -55,7 +55,7 @@ export interface TestReport {
 export function runTests(): TestReport {
   const fixturesPath = path.join(process.cwd(), 'tests', 'test-fixtures.json');
   const fixtures: Fixture[] = JSON.parse(fs.readFileSync(fixturesPath, 'utf8'));
-  const rules = getCachedRules();
+  const rules = getCachedRules('SMART');
 
   const cases: CaseResult[] = fixtures.map(fixture => {
     const conn: PrismConnection = {
