@@ -1,7 +1,7 @@
 import Fastify from 'fastify';
 import * as crypto from 'crypto';
 import { getPrismaClient } from './db/validator';
-import { getConnectionById, getConnectionsSince, getBackendServers, getConnectionIdByShareToken, testPrismDatabaseConnection } from './db/prism';
+import { getConnectionById, getConnectionsSince, getBackendServers, getConnectionIdByShareToken, getPipelineBundleByShareToken, testPrismDatabaseConnection } from './db/prism';
 import { validateAndSave } from './core';
 import { runTests } from './tester';
 import { startPoller, stopPoller, getPollerStatus } from './poller';
@@ -429,6 +429,64 @@ app.post('/validate', { preHandler: requireAuth }, async (req, reply) => {
         ...(r.value !== undefined ? { value: r.value } : {}),
       })),
     })),
+  };
+});
+
+// ── Pipeline (aggregate one OAuth flow by its pipeline share token) ───────────
+
+app.post('/pipeline/validate', { preHandler: requireAuth }, async (req, reply) => {
+  const { shareToken } = req.body as { shareToken?: string };
+  const token = shareToken?.trim();
+  if (!token) return reply.code(400).send({ error: 'Pipeline shareToken required' });
+
+  let bundle;
+  try {
+    bundle = await getPipelineBundleByShareToken(token);
+  } catch (err) {
+    const message = err instanceof Error ? err.message : 'Prism database unavailable';
+    return reply.code(503).send({ error: message });
+  }
+  if (!bundle) return reply.code(404).send({ error: 'Pipeline shareToken not found' });
+
+  const connections = [];
+  for (const entry of bundle.entries) {
+    const output = await validateAndSave(entry.conn);
+    connections.push({
+      role: entry.role,
+      connectionId: entry.conn.id,
+      shareToken: entry.conn.share_token ?? null,
+      reqMethod: entry.conn.req_method,
+      reqUrl: entry.conn.req_url,
+      validations: output.validations.map(v => ({
+        standard: v.standard,
+        flowStep: v.flowStep,
+        results: v.results.map(r => ({
+          field: r.field,
+          location: r.location,
+          required: r.required,
+          status: r.status,
+          ...(r.detail !== undefined ? { detail: r.detail } : {}),
+          ...(r.value !== undefined ? { value: r.value } : {}),
+        })),
+      })),
+    });
+  }
+
+  return {
+    pipeline: {
+      id: bundle.id,
+      shareToken: bundle.shareToken,
+      accessTokenPreview: bundle.accessTokenPreview,
+      participantUserId: bundle.participantUserId,
+      authenticationServerId: bundle.authenticationServerId,
+      issuedAt: bundle.issuedAt,
+      complete: bundle.complete,
+      legal: bundle.legal,
+      success: bundle.success,
+      resourceCallCount: bundle.resourceCallCount,
+      createdAt: bundle.createdAt,
+    },
+    connections,
   };
 });
 

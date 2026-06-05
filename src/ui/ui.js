@@ -18,6 +18,7 @@
     ['dashboard', 'Dashboard', '/dashboard.html'],
     ['results', 'Results', '/results.html'],
     ['validate', 'Inspect', '/validate.html'],
+    ['pipeline', 'Pipeline', '/pipeline.html'],
     ['rules', 'Rules', '/rules.html'],
     ['settings', 'Settings', '/settings.html'],
     ['test', 'Test', '/test.html'],
@@ -66,9 +67,9 @@
 
   function renderNav(container) {
     const active = container.dataset.appNav || '';
-    const links = navItems.map(([key, label, href], index) => {
+    const links = navItems.map(([key, label, href]) => {
       const classes = key === active ? 'text-blue-300 font-medium' : 'hover:text-gray-300';
-      const spacer = index === 4 ? ' ml-auto' : '';
+      const spacer = key === 'settings' ? ' ml-auto' : '';
       return `<a href="${withBase(href)}" class="${spacer}${spacer ? ' ' : ''}${classes}">${label}</a>`;
     }).join('');
 

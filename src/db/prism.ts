@@ -99,6 +99,136 @@ export async function getConnectionById(id: string): Promise<PrismConnection | n
   return rows[0] ?? null;
 }
 
+export type PipelineConnectionRole = 'token_issue' | 'resource' | 'validation';
+
+export interface PipelineConnectionEntry {
+  role: PipelineConnectionRole;
+  conn: PrismConnection;
+}
+
+export interface PipelineBundle {
+  id: string;
+  shareToken: string;
+  accessTokenPreview: string | null;
+  participantUserId: number | null;
+  authenticationServerId: string | null;
+  issuedAt: string | null;
+  complete: boolean;
+  legal: boolean;
+  success: boolean;
+  resourceCallCount: number;
+  createdAt: string;
+  entries: PipelineConnectionEntry[];
+}
+
+// Resolve an OAuth pipeline share token into every connection that makes up that
+// single OAuth flow: the ITI-71 token-issue request, plus each ITI-72 resource
+// call and its optional token-validation (introspection) request — ordered as
+// the flow happened. All member connections are fetched in one query to keep
+// external Prism DB load minimal.
+export async function getPipelineBundleByShareToken(shareToken: string): Promise<PipelineBundle | null> {
+  const db = await getPool();
+
+  const { rows: pipelineRows } = await db.query<{
+    id: string;
+    access_token_preview: string | null;
+    token_issue_connection_id: string | null;
+    participant_user_id: number | null;
+    authentication_server_id: string | null;
+    issued_at: Date | null;
+    complete: boolean;
+    legal: boolean;
+    success: boolean;
+    resource_call_count: number;
+    created_at: Date;
+  }>(
+    `SELECT
+       id::text                        AS id,
+       access_token_preview,
+       token_issue_connection_id::text AS token_issue_connection_id,
+       participant_user_id,
+       authentication_server_id::text  AS authentication_server_id,
+       issued_at,
+       complete,
+       legal,
+       success,
+       resource_call_count,
+       created_at
+     FROM oauth_pipelines
+     WHERE share_token = $1
+     LIMIT 1`,
+    [shareToken],
+  );
+  const pipeline = pipelineRows[0];
+  if (!pipeline) return null;
+
+  const { rows: callRows } = await db.query<{
+    resource_connection_id: string | null;
+    validation_connection_id: string | null;
+  }>(
+    `SELECT
+       resource_connection_id::text   AS resource_connection_id,
+       validation_connection_id::text AS validation_connection_id
+     FROM oauth_pipeline_resource_calls
+     WHERE pipeline_id = $1
+     ORDER BY created_at ASC`,
+    [pipeline.id],
+  );
+
+  // Ordered (id, role) plan: token issue first, then each resource call followed
+  // by its validation call.
+  const plan: { id: string; role: PipelineConnectionRole }[] = [];
+  if (pipeline.token_issue_connection_id) {
+    plan.push({ id: pipeline.token_issue_connection_id, role: 'token_issue' });
+  }
+  for (const call of callRows) {
+    if (call.resource_connection_id) plan.push({ id: call.resource_connection_id, role: 'resource' });
+    if (call.validation_connection_id) plan.push({ id: call.validation_connection_id, role: 'validation' });
+  }
+
+  const ids = plan.map(p => p.id);
+  const connById = new Map<string, PrismConnection>();
+  if (ids.length > 0) {
+    const { rows: conns } = await db.query<PrismConnection>(
+      `SELECT
+         id::text        AS id,
+         user_id,
+         server_id::text AS server_id,
+         share_token,
+         req_method,
+         req_url,
+         req_headers,
+         req_body,
+         res_body
+       FROM connections
+       WHERE id::text = ANY($1)`,
+      [ids],
+    );
+    for (const c of conns) connById.set(c.id, c);
+  }
+
+  const entries: PipelineConnectionEntry[] = [];
+  for (const p of plan) {
+    const conn = connById.get(p.id);
+    if (conn) entries.push({ role: p.role, conn });
+  }
+
+  return {
+    id: pipeline.id,
+    shareToken,
+    accessTokenPreview: pipeline.access_token_preview,
+    participantUserId: pipeline.participant_user_id,
+    authenticationServerId: pipeline.authentication_server_id,
+    issuedAt: pipeline.issued_at ? pipeline.issued_at.toISOString() : null,
+    complete: pipeline.complete,
+    legal: pipeline.legal,
+    success: pipeline.success,
+    resourceCallCount: pipeline.resource_call_count,
+    createdAt: pipeline.created_at.toISOString(),
+    entries,
+  };
+}
+
 export async function getConnectionIdByShareToken(shareToken: string): Promise<string | null> {
   const db = await getPool();
   const { rows } = await db.query<{ id: string }>(
