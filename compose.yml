@@ -1,6 +1,6 @@
 services:
 
-  nginx:
+  smart-on-fhir-validator-nginx:
     image: nginx:alpine
     ports:
       - "${FRONTEND_PORT:-80}:80"
@@ -13,10 +13,12 @@ services:
     command: >
       /bin/sh -c "envsubst '$$API_PORT $$BASE_PATH' < /etc/nginx/nginx.conf.template > /etc/nginx/nginx.conf && nginx -g 'daemon off;'"
     depends_on:
-      - validator
+      - smart-on-fhir-validator-validator
     restart: unless-stopped
+    networks:
+      - twcat26
 
-  validator:
+  smart-on-fhir-validator-validator:
     build: .
     expose:
       - "3000"
@@ -30,11 +32,13 @@ services:
     volumes:
       - ./tests:/app/tests:ro
     depends_on:
-      postgres:
+      smart-on-fhir-validator-postgres:
         condition: service_healthy
     restart: unless-stopped
+    networks:
+      - twcat26
 
-  postgres:
+  smart-on-fhir-validator-postgres:
     image: postgres:16-alpine
     expose:
       - "${VALIDATOR_DB_PORT:-5432}"
@@ -44,13 +48,19 @@ services:
       POSTGRES_DB: ${VALIDATOR_DB_NAME:-validator}
       PGPORT: ${VALIDATOR_DB_PORT:-5432}
     volumes:
-      - validator_db:/var/lib/postgresql/data
+      - smart-on-fhir-validator-:/var/lib/postgresql/data
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${VALIDATOR_DB_USER:-validator} -p ${VALIDATOR_DB_PORT:-5432}"]
       interval: 5s
       timeout: 5s
       retries: 5
     restart: unless-stopped
-
+    networks:
+      - twcat26
 volumes:
-  validator_db:
+  smart-on-fhir-validator-:
+
+
+networks:
+  twcat26:
+    external: true

@@ -1,0 +1,28 @@
+events {}
+
+http {
+  include       /etc/nginx/mime.types;
+  default_type  application/octet-stream;
+
+  server {
+    listen 80;
+
+    location /api/ {
+      proxy_pass         http://validator:3000/;
+      proxy_set_header   Host $host;
+      proxy_set_header   X-Real-IP $remote_addr;
+      proxy_read_timeout 60s;
+    }
+
+    location = /config.js {
+      default_type application/javascript;
+      return 200 'window.BASE_PATH="${BASE_PATH}";';
+    }
+
+    location / {
+      root  /usr/share/nginx/html;
+      index login.html;
+      try_files $uri $uri/ /login.html;
+    }
+  }
+}
