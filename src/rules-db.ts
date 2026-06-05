@@ -45,7 +45,7 @@ const DEFAULT_IDENTIFIERS = [
   { standard: 'SMART', flowStep: 'authorization_request',     description: 'OAuth Authorization Endpoint 請求 (AppLaunch Step 200)',                  method: 'GET',  urlContains: '/protocol/openid-connect/auth',    bodyGrantType: null,                 priority: 2 },
   { standard: 'SMART', flowStep: 'token_request_auth_code',   description: 'Token Endpoint 請求 — Authorization Code Flow (AppLaunch Step 210)',       method: 'POST', urlContains: '/protocol/openid-connect/token',   bodyGrantType: 'authorization_code', priority: 3 },
   { standard: 'SMART', flowStep: 'token_request_client_cred', description: 'Token Endpoint 請求 — Client Credentials Flow (BackendServices Step 200)', method: 'POST', urlContains: '/protocol/openid-connect/token',   bodyGrantType: 'client_credentials', priority: 4 },
-  { standard: 'SMART', flowStep: 'fhir_request',              description: 'FHIR Resource 存取請求 (Step 300)',                                       method: '*',    urlContains: '/fhir',                            bodyGrantType: null,                 priority: 5 },
+  { standard: 'SMART', flowStep: 'fhir_request',              description: 'FHIR Resource 存取請求 (Step 300)',                                       method: '*',    urlContains: '/fhir|fhirsrv',                    bodyGrantType: null,                 priority: 5 },
   { standard: 'SMART', flowStep: 'token_request_refresh',     description: 'Token Endpoint 請求 — Refresh Token Flow (AppLaunch Step 310)',            method: 'POST', urlContains: '/protocol/openid-connect/token',   bodyGrantType: 'refresh_token',      priority: 6 },
 
   // ── IUA — ITI-71 / ITI-72 (no metadata discovery step) ──────────────────────
@@ -53,7 +53,7 @@ const DEFAULT_IDENTIFIERS = [
   { standard: 'IUA', flowStep: 'token_request_auth_code',   description: 'IUA Step 2 — ITI-71 Get Access Token (Authorization Code Grant)', method: 'POST', urlContains: '/protocol/openid-connect/token', bodyGrantType: 'authorization_code', priority: 2 },
   { standard: 'IUA', flowStep: 'token_request_client_cred', description: 'IUA Step 2 — ITI-71 Get Access Token (Client Credentials Grant)', method: 'POST', urlContains: '/protocol/openid-connect/token', bodyGrantType: 'client_credentials', priority: 3 },
   { standard: 'IUA', flowStep: 'token_request_refresh',     description: 'IUA Step 2 — ITI-71 Get Access Token (Refresh Token)',            method: 'POST', urlContains: '/protocol/openid-connect/token', bodyGrantType: 'refresh_token',      priority: 4 },
-  { standard: 'IUA', flowStep: 'fhir_request',              description: 'IUA Step 3 — ITI-72 Incorporate Access Token',                    method: '*',    urlContains: '/fhir',                          bodyGrantType: null,                 priority: 5 },
+  { standard: 'IUA', flowStep: 'fhir_request',              description: 'IUA Step 3 — ITI-72 Incorporate Access Token',                    method: '*',    urlContains: '/fhir|fhirsrv',                  bodyGrantType: null,                 priority: 5 },
 ];
 
 const DEFAULT_FIELDS = [
@@ -133,8 +133,10 @@ const DEFAULT_FIELDS = [
   { standard: 'IUA', flowStep: 'token_request_client_cred', fieldName: 'Authorization', fieldLocation: 'headers',     fieldType: 'required', pattern: null,                                  sortOrder: 1 },
   { standard: 'IUA', flowStep: 'token_request_client_cred', fieldName: 'grant_type',           fieldLocation: 'body_params', fieldType: 'required', pattern: '^client_credentials$', sortOrder: 0 },
   { standard: 'IUA', flowStep: 'token_request_client_cred', fieldName: 'scope',                fieldLocation: 'body_params', fieldType: 'required', pattern: null,                    sortOrder: 1 },
-  { standard: 'IUA', flowStep: 'token_request_client_cred', fieldName: 'resource',             fieldLocation: 'body_params', fieldType: 'optional', pattern: null,                    sortOrder: 2 },
-  { standard: 'IUA', flowStep: 'token_request_client_cred', fieldName: 'requested_token_type', fieldLocation: 'body_params', fieldType: 'optional', pattern: null,                    sortOrder: 3 },
+  { standard: 'IUA', flowStep: 'token_request_client_cred', fieldName: 'resource',             fieldLocation: 'body_params', fieldType: 'optional',    pattern: null,                    sortOrder: 2 },
+  { standard: 'IUA', flowStep: 'token_request_client_cred', fieldName: 'requested_token_type', fieldLocation: 'body_params', fieldType: 'optional',    pattern: null,                    sortOrder: 3 },
+  { standard: 'IUA', flowStep: 'token_request_client_cred', fieldName: 'client_id',            fieldLocation: 'body_params', fieldType: 'conditional', pattern: null,                    sortOrder: 4 },
+  { standard: 'IUA', flowStep: 'token_request_client_cred', fieldName: 'client_secret',        fieldLocation: 'body_params', fieldType: 'conditional', pattern: null,                    sortOrder: 5 },
 
   // Step 2 — ITI-71 Token Request — Refresh Token
   { standard: 'IUA', flowStep: 'token_request_refresh', fieldName: 'Content-Type',  fieldLocation: 'headers',     fieldType: 'required', pattern: '^application/x-www-form-urlencoded', sortOrder: 0 },

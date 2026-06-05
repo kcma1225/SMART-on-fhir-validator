@@ -1,6 +1,7 @@
 [
   {
     "id": "test-001",
+    "standard": "SMART",
     "description": "Authorization Request — 所有 Required 欄位齊全",
     "input": {
       "institution_id": 1,
@@ -27,6 +28,7 @@
   },
   {
     "id": "test-002",
+    "standard": "SMART",
     "description": "Authorization Request — 缺少 PKCE 欄位",
     "input": {
       "institution_id": 1,
@@ -46,6 +48,7 @@
   },
   {
     "id": "test-003",
+    "standard": "SMART",
     "description": "Token Request Auth Code — 所有 Required 欄位齊全",
     "input": {
       "institution_id": 2,
@@ -68,6 +71,7 @@
   },
   {
     "id": "test-004",
+    "standard": "SMART",
     "description": "Token Request Auth Code — 缺少 code_verifier",
     "input": {
       "institution_id": 2,
@@ -86,6 +90,7 @@
   },
   {
     "id": "test-005",
+    "standard": "SMART",
     "description": "Token Request Client Credentials — 所有 Required 欄位齊全",
     "input": {
       "institution_id": 2,
@@ -107,6 +112,7 @@
   },
   {
     "id": "test-006",
+    "standard": "SMART",
     "description": "Token Request Client Credentials — 缺少 client_assertion",
     "input": {
       "institution_id": 2,
@@ -125,6 +131,7 @@
   },
   {
     "id": "test-007",
+    "standard": "SMART",
     "description": "Token Request Refresh — 所有 Required 欄位齊全",
     "input": {
       "institution_id": 2,
@@ -145,6 +152,7 @@
   },
   {
     "id": "test-008",
+    "standard": "SMART",
     "description": "Token Request Refresh — 缺少 refresh_token",
     "input": {
       "institution_id": 2,
@@ -163,6 +171,7 @@
   },
   {
     "id": "test-009",
+    "standard": "SMART",
     "description": "SMART Metadata — 所有 Required 欄位齊全",
     "input": {
       "institution_id": 3,
@@ -170,13 +179,14 @@
       "req_url": "https://auth.example.com/.well-known/smart-configuration",
       "req_headers": {},
       "req_body": null,
-      "res_body": "{\"grant_types_supported\":[\"authorization_code\"],\"token_endpoint\":\"https://auth.example.com/token\",\"capabilities\":[\"launch-standalone\"],\"code_challenge_methods_supported\":[\"S256\"]}"
+      "res_body": "{\"grant_types_supported\":[\"authorization_code\"],\"token_endpoint\":\"https://auth.example.com/token\",\"authorization_endpoint\":\"https://auth.example.com/auth\",\"capabilities\":[\"launch-standalone\"],\"code_challenge_methods_supported\":[\"S256\"]}"
     },
     "expected": {
       "flowStep": "smart_metadata",
       "results": [
         { "field": "grant_types_supported",            "status": "PASS" },
         { "field": "token_endpoint",                   "status": "PASS" },
+        { "field": "authorization_endpoint",           "status": "PASS" },
         { "field": "capabilities",                     "status": "PASS" },
         { "field": "code_challenge_methods_supported", "status": "PASS" }
       ]
@@ -184,24 +194,27 @@
   },
   {
     "id": "test-010",
-    "description": "SMART Metadata — 缺少 capabilities",
+    "standard": "SMART",
+    "description": "SMART Metadata — 缺少 capabilities (conditional → SKIP)",
     "input": {
       "institution_id": 3,
       "req_method": "GET",
       "req_url": "https://auth.example.com/.well-known/smart-configuration",
       "req_headers": {},
       "req_body": null,
-      "res_body": "{\"grant_types_supported\":[\"authorization_code\"],\"token_endpoint\":\"https://auth.example.com/token\",\"code_challenge_methods_supported\":[\"S256\"]}"
+      "res_body": "{\"grant_types_supported\":[\"authorization_code\"],\"token_endpoint\":\"https://auth.example.com/token\",\"authorization_endpoint\":\"https://auth.example.com/auth\",\"code_challenge_methods_supported\":[\"S256\"]}"
     },
     "expected": {
       "flowStep": "smart_metadata",
       "results": [
-        { "field": "capabilities", "status": "FAIL" }
+        { "field": "capabilities",           "status": "SKIP" },
+        { "field": "authorization_endpoint", "status": "PASS" }
       ]
     }
   },
   {
     "id": "test-011",
+    "standard": "SMART",
     "description": "FHIR Request — Authorization Bearer header 存在",
     "input": {
       "institution_id": 4,
@@ -220,6 +233,7 @@
   },
   {
     "id": "test-012",
+    "standard": "SMART",
     "description": "FHIR Request — 缺少 Authorization header",
     "input": {
       "institution_id": 4,
@@ -238,6 +252,7 @@
   },
   {
     "id": "test-013",
+    "standard": "SMART",
     "description": "FHIR Request — Authorization 存在但非 Bearer 格式",
     "input": {
       "institution_id": 4,
@@ -256,6 +271,7 @@
   },
   {
     "id": "test-014",
+    "standard": "SMART",
     "description": "Unknown flow — 無法識別的 URL",
     "input": {
       "institution_id": 1,
@@ -268,6 +284,229 @@
     "expected": {
       "flowStep": "unknown",
       "results": []
+    }
+  },
+  {
+    "id": "iua-001",
+    "standard": "IUA",
+    "description": "IUA Authorization Request — 所有 Required 欄位齊全 (response_type=code, S256)",
+    "input": {
+      "institution_id": 1,
+      "req_method": "GET",
+      "req_url": "https://auth.example.com/realms/IUA/protocol/openid-connect/auth?response_type=code&client_id=iua-fhir&state=abc123&code_challenge=E9Melhoa2OwvFrEMTJguCHaoeK&code_challenge_method=S256&redirect_uri=https%3A%2F%2Fclient.example.com%2Fcb&scope=openid&resource=https%3A%2F%2Ffhir.example.com",
+      "req_headers": {},
+      "req_body": null,
+      "res_body": null
+    },
+    "expected": {
+      "flowStep": "authorization_request",
+      "results": [
+        { "field": "response_type",         "status": "PASS" },
+        { "field": "client_id",             "status": "PASS" },
+        { "field": "state",                 "status": "PASS" },
+        { "field": "code_challenge",        "status": "PASS" },
+        { "field": "redirect_uri",          "status": "PASS" },
+        { "field": "scope",                 "status": "PASS" },
+        { "field": "code_challenge_method", "status": "PASS" },
+        { "field": "resource",              "status": "PASS" }
+      ]
+    }
+  },
+  {
+    "id": "iua-002",
+    "standard": "IUA",
+    "description": "IUA Authorization Request — response_type 非 code (pattern fail) 且缺 code_challenge",
+    "input": {
+      "institution_id": 1,
+      "req_method": "GET",
+      "req_url": "https://auth.example.com/realms/IUA/protocol/openid-connect/auth?response_type=token&client_id=iua-fhir&state=abc123",
+      "req_headers": {},
+      "req_body": null,
+      "res_body": null
+    },
+    "expected": {
+      "flowStep": "authorization_request",
+      "results": [
+        { "field": "response_type",  "status": "FAIL", "detail": "value does not match pattern ^code$" },
+        { "field": "client_id",      "status": "PASS" },
+        { "field": "state",          "status": "PASS" },
+        { "field": "code_challenge", "status": "FAIL" },
+        { "field": "resource",       "status": "SKIP" }
+      ]
+    }
+  },
+  {
+    "id": "iua-003",
+    "standard": "IUA",
+    "description": "IUA Authorization Request — code_challenge_method 非 S256 (pattern fail)",
+    "input": {
+      "institution_id": 1,
+      "req_method": "GET",
+      "req_url": "https://auth.example.com/realms/IUA/protocol/openid-connect/auth?response_type=code&client_id=iua-fhir&state=abc123&code_challenge=E9Melhoa2OwvFrEMTJguCHaoeK&code_challenge_method=plain",
+      "req_headers": {},
+      "req_body": null,
+      "res_body": null
+    },
+    "expected": {
+      "flowStep": "authorization_request",
+      "results": [
+        { "field": "response_type",         "status": "PASS" },
+        { "field": "code_challenge",        "status": "PASS" },
+        { "field": "code_challenge_method", "status": "FAIL", "detail": "value does not match pattern ^S256$" }
+      ]
+    }
+  },
+  {
+    "id": "iua-004",
+    "standard": "IUA",
+    "description": "IUA ITI-71 Token Request (Authorization Code) — Required 齊全",
+    "input": {
+      "institution_id": 2,
+      "req_method": "POST",
+      "req_url": "https://auth.example.com/realms/IUA/protocol/openid-connect/token",
+      "req_headers": { "Content-Type": "application/x-www-form-urlencoded", "Authorization": "Basic aXVhOnNlY3JldA==" },
+      "req_body": "grant_type=authorization_code&code=SplxlOBeZQQYbYS6WxSbIA&code_verifier=dBjftJeZ4CVP-mB92K27uhbUJU1p1r",
+      "res_body": null
+    },
+    "expected": {
+      "flowStep": "token_request_auth_code",
+      "results": [
+        { "field": "grant_type",           "status": "PASS" },
+        { "field": "code",                 "status": "PASS" },
+        { "field": "code_verifier",        "status": "PASS" },
+        { "field": "Authorization",        "status": "PASS" },
+        { "field": "Content-Type",         "status": "PASS" },
+        { "field": "requested_token_type", "status": "SKIP" }
+      ]
+    }
+  },
+  {
+    "id": "iua-005",
+    "standard": "IUA",
+    "description": "IUA ITI-71 Token Request (Authorization Code) — 缺少 Authorization header",
+    "input": {
+      "institution_id": 2,
+      "req_method": "POST",
+      "req_url": "https://auth.example.com/realms/IUA/protocol/openid-connect/token",
+      "req_headers": { "Content-Type": "application/x-www-form-urlencoded" },
+      "req_body": "grant_type=authorization_code&code=SplxlOBeZQQYbYS6WxSbIA&code_verifier=dBjftJeZ4CVP-mB92K27uhbUJU1p1r",
+      "res_body": null
+    },
+    "expected": {
+      "flowStep": "token_request_auth_code",
+      "results": [
+        { "field": "Authorization",  "status": "FAIL" },
+        { "field": "Content-Type",   "status": "PASS" },
+        { "field": "grant_type",     "status": "PASS" }
+      ]
+    }
+  },
+  {
+    "id": "iua-006",
+    "standard": "IUA",
+    "description": "IUA ITI-71 Token Request (Client Credentials) — Required 齊全 + conditional client_id/client_secret 帶入",
+    "input": {
+      "institution_id": 2,
+      "req_method": "POST",
+      "req_url": "https://auth.example.com/realms/IUA/protocol/openid-connect/token",
+      "req_headers": { "Content-Type": "application/x-www-form-urlencoded", "Authorization": "Basic aXVhOnNlY3JldA==" },
+      "req_body": "grant_type=client_credentials&scope=system%2FObservation.rs&client_id=iua-fhir&client_secret=s3cr3t",
+      "res_body": null
+    },
+    "expected": {
+      "flowStep": "token_request_client_cred",
+      "results": [
+        { "field": "grant_type",           "status": "PASS" },
+        { "field": "scope",                "status": "PASS" },
+        { "field": "Content-Type",         "status": "PASS" },
+        { "field": "Authorization",        "status": "PASS" },
+        { "field": "client_id",            "status": "PASS" },
+        { "field": "client_secret",        "status": "PASS" },
+        { "field": "resource",             "status": "SKIP" },
+        { "field": "requested_token_type", "status": "SKIP" }
+      ]
+    }
+  },
+  {
+    "id": "iua-007",
+    "standard": "IUA",
+    "description": "IUA ITI-71 Token Request (Client Credentials) — 缺 scope (required fail) 且 conditional 未帶 (SKIP)",
+    "input": {
+      "institution_id": 2,
+      "req_method": "POST",
+      "req_url": "https://auth.example.com/realms/IUA/protocol/openid-connect/token",
+      "req_headers": { "Content-Type": "application/x-www-form-urlencoded", "Authorization": "Basic aXVhOnNlY3JldA==" },
+      "req_body": "grant_type=client_credentials",
+      "res_body": null
+    },
+    "expected": {
+      "flowStep": "token_request_client_cred",
+      "results": [
+        { "field": "grant_type",    "status": "PASS" },
+        { "field": "scope",         "status": "FAIL" },
+        { "field": "client_id",     "status": "SKIP" },
+        { "field": "client_secret", "status": "SKIP" }
+      ]
+    }
+  },
+  {
+    "id": "iua-008",
+    "standard": "IUA",
+    "description": "IUA ITI-71 Token Request (Refresh Token) — Required 齊全",
+    "input": {
+      "institution_id": 2,
+      "req_method": "POST",
+      "req_url": "https://auth.example.com/realms/IUA/protocol/openid-connect/token",
+      "req_headers": { "Content-Type": "application/x-www-form-urlencoded" },
+      "req_body": "grant_type=refresh_token&refresh_token=tGzv3JOkF0XG5Qx2TlKWIA",
+      "res_body": null
+    },
+    "expected": {
+      "flowStep": "token_request_refresh",
+      "results": [
+        { "field": "grant_type",    "status": "PASS" },
+        { "field": "refresh_token", "status": "PASS" },
+        { "field": "Content-Type",  "status": "PASS" },
+        { "field": "scope",         "status": "SKIP" }
+      ]
+    }
+  },
+  {
+    "id": "iua-009",
+    "standard": "IUA",
+    "description": "IUA ITI-72 FHIR Request — 以 fhirsrv host 觸發 (req_url 無 /fhir route)",
+    "input": {
+      "institution_id": 4,
+      "req_method": "GET",
+      "req_url": "/Patient/123",
+      "req_headers": { "host": "twcat-fhirsrv.dicom.org.tw", "Authorization": "Bearer eyJhbGciOiJSUzI1NiJ9.eyJzdWIiOiJ1c2VyMSJ9.sig" },
+      "req_body": null,
+      "res_body": null
+    },
+    "expected": {
+      "flowStep": "fhir_request",
+      "results": [
+        { "field": "Authorization", "status": "PASS" }
+      ]
+    }
+  },
+  {
+    "id": "iua-010",
+    "standard": "IUA",
+    "description": "IUA ITI-72 FHIR Request — fhirsrv host 但 Authorization 非 Bearer (pattern fail)",
+    "input": {
+      "institution_id": 4,
+      "req_method": "POST",
+      "req_url": "/fhir/Bundle?_format=json",
+      "req_headers": { "host": "twcat-fhirsrv.dicom.org.tw", "Authorization": "Basic dXNlcjpwYXNz" },
+      "req_body": null,
+      "res_body": null
+    },
+    "expected": {
+      "flowStep": "fhir_request",
+      "results": [
+        { "field": "Authorization", "status": "FAIL", "detail": "header present but does not match pattern ^Bearer .+" }
+      ]
     }
   }
 ]

@@ -3,7 +3,8 @@ import * as path from 'path';
 import { classify } from './router';
 import { check } from './checker';
 import { getCachedRules } from './rules-db';
-import type { PrismConnection, FieldStatus } from './types';
+import { STANDARDS } from './types';
+import type { PrismConnection, FieldStatus, Standard } from './types';
 
 interface FixtureInput {
   req_method: string;
@@ -22,6 +23,7 @@ interface FixtureExpectedField {
 interface Fixture {
   id: string;
   description: string;
+  standard?: string; // 'SMART' (default) | 'IUA'
   input: FixtureInput;
   expected: {
     flowStep: string;
@@ -38,11 +40,16 @@ export interface FieldComparison {
 
 export interface CaseResult {
   id: string;
+  standard: Standard;
   description: string;
   expectedFlowStep: string;
   actualFlowStep: string;
   status: 'PASS' | 'FAIL';
   fields: FieldComparison[];
+}
+
+function resolveStandard(value: string | undefined): Standard {
+  return value && (STANDARDS as string[]).includes(value) ? (value as Standard) : 'SMART';
 }
 
 export interface TestReport {
@@ -55,9 +62,11 @@ export interface TestReport {
 export function runTests(): TestReport {
   const fixturesPath = path.join(process.cwd(), 'tests', 'test-fixtures.json');
   const fixtures: Fixture[] = JSON.parse(fs.readFileSync(fixturesPath, 'utf8'));
-  const rules = getCachedRules('SMART');
 
   const cases: CaseResult[] = fixtures.map(fixture => {
+    const standard = resolveStandard(fixture.standard);
+    const rules = getCachedRules(standard);
+
     const conn: PrismConnection = {
       id: fixture.id,
       user_id: null,
@@ -91,6 +100,7 @@ export function runTests(): TestReport {
 
     return {
       id: fixture.id,
+      standard,
       description: fixture.description,
       expectedFlowStep: fixture.expected.flowStep,
       actualFlowStep,

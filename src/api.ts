@@ -3,6 +3,7 @@ import * as crypto from 'crypto';
 import { getPrismaClient } from './db/validator';
 import { getConnectionById, getConnectionsSince, getBackendServers, getConnectionIdByShareToken, getPipelineBundleByShareToken, testPrismDatabaseConnection } from './db/prism';
 import { validateAndSave } from './core';
+import { validateIntrospection } from './token-validation';
 import { runTests } from './tester';
 import { startPoller, stopPoller, getPollerStatus } from './poller';
 import {
@@ -457,6 +458,9 @@ app.post('/pipeline/validate', { preHandler: requireAuth }, async (req, reply) =
       shareToken: entry.conn.share_token ?? null,
       reqMethod: entry.conn.req_method,
       reqUrl: entry.conn.req_url,
+      tokenValidation: entry.role === 'validation'
+        ? validateIntrospection(entry.conn.req_body, entry.conn.res_body)
+        : null,
       validations: output.validations.map(v => ({
         standard: v.standard,
         flowStep: v.flowStep,

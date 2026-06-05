@@ -16,8 +16,14 @@ function matches(conn: PrismConnection, rule: FlowRule): boolean {
 
   // url_contains may list several alternatives separated by "|"; the request
   // matches if it contains ANY of them (e.g. smart-configuration OR openid-configuration).
+  // The target is the Host header + the request path, so an alternative can target
+  // either the host (e.g. "fhirsrv" → twcat-fhirsrv.dicom.org.tw) or the path
+  // (e.g. "/fhir"): the captured req_url is path-only, so host-based hints would
+  // otherwise never match.
+  const host = conn.req_headers ? (conn.req_headers['host'] ?? conn.req_headers['Host'] ?? '') : '';
+  const matchTarget = host ? `${host} ${conn.req_url}` : conn.req_url;
   const urlAlternatives = identify.url_contains.split('|').map(s => s.trim()).filter(Boolean);
-  if (!urlAlternatives.some(part => conn.req_url.includes(part))) return false;
+  if (!urlAlternatives.some(part => matchTarget.includes(part))) return false;
 
   // A .well-known discovery document (e.g. /fhir/.well-known/smart-configuration)
   // is never a resource/auth request — it must only match a metadata-style rule
