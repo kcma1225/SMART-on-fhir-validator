@@ -1,7 +1,7 @@
 import Fastify from 'fastify';
 import * as crypto from 'crypto';
 import { getPrismaClient } from './db/validator';
-import { getConnectionById, getConnectionsSince, getBackendServers, getConnectionIdByShareToken, getPipelineBundleByShareToken, testPrismDatabaseConnection } from './db/prism';
+import { getConnectionById, getConnectionsSince, getBackendServers, getConnectionIdByShareToken, getPipelineBundleByShareToken, getPipelineBundleById, getPipelines, testPrismDatabaseConnection } from './db/prism';
 import { validateAndSave } from './core';
 import { validateIntrospection } from './token-validation';
 import { runTests } from './tester';
@@ -435,19 +435,34 @@ app.post('/validate', { preHandler: requireAuth }, async (req, reply) => {
 
 // ── Pipeline (aggregate one OAuth flow by its pipeline share token) ───────────
 
-app.post('/pipeline/validate', { preHandler: requireAuth }, async (req, reply) => {
-  const { shareToken } = req.body as { shareToken?: string };
-  const token = shareToken?.trim();
-  if (!token) return reply.code(400).send({ error: 'Pipeline shareToken required' });
-
-  let bundle;
+// List all OAuth pipelines (newest first, paginated) for the pipeline table.
+app.get('/pipelines', { preHandler: requireAuth }, async (req, reply) => {
+  const { limit = '50', offset = '0' } = req.query as Record<string, string>;
+  const { take, skip } = parsePagination(limit, offset);
   try {
-    bundle = await getPipelineBundleByShareToken(token);
+    return await getPipelines(take, skip);
   } catch (err) {
     const message = err instanceof Error ? err.message : 'Prism database unavailable';
     return reply.code(503).send({ error: message });
   }
-  if (!bundle) return reply.code(404).send({ error: 'Pipeline shareToken not found' });
+});
+
+app.post('/pipeline/validate', { preHandler: requireAuth }, async (req, reply) => {
+  const { shareToken, pipelineId } = req.body as { shareToken?: string; pipelineId?: string };
+  const id = pipelineId?.trim();
+  const token = shareToken?.trim();
+  if (!id && !token) return reply.code(400).send({ error: 'pipelineId or shareToken required' });
+
+  let bundle;
+  try {
+    // pipelineId comes from in-app navigation (the pipeline table); shareToken is
+    // the only value a user can type in to look up a pipeline directly.
+    bundle = id ? await getPipelineBundleById(id) : await getPipelineBundleByShareToken(token!);
+  } catch (err) {
+    const message = err instanceof Error ? err.message : 'Prism database unavailable';
+    return reply.code(503).send({ error: message });
+  }
+  if (!bundle) return reply.code(404).send({ error: id ? 'Pipeline not found' : 'Pipeline shareToken not found' });
 
   const connections = [];
   for (const entry of bundle.entries) {

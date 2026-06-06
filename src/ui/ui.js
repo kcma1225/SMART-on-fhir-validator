@@ -70,10 +70,10 @@
   function renderNav(container) {
     const active = container.dataset.appNav || '';
 
-    // Desktop: inline row; "settings" carries ml-auto so admin items sit on the right.
+    // Desktop: inline row; "rules" carries ml-auto so it + settings + test sit on the right.
     const desktopLinks = navItems.map(([key, label, href]) => {
       const classes = key === active ? 'text-blue-300 font-medium' : 'hover:text-gray-300';
-      const spacer = key === 'settings' ? ' ml-auto' : '';
+      const spacer = key === 'rules' ? ' ml-auto' : '';
       return `<a href="${withBase(href)}" class="${spacer}${spacer ? ' ' : ''}${classes}">${label}</a>`;
     }).join('');
 

@@ -40,8 +40,38 @@
       <p id="error-msg" class="text-red-600 dark:text-red-400 text-sm mt-2 hidden"></p>
     </div>
 
-    <!-- Result section -->
+    <!-- List of all pipelines -->
+    <div id="list-section">
+      <div class="flex flex-wrap items-center justify-between gap-2 mb-3">
+        <h3 class="text-lg font-semibold dark:text-gray-100">所有 OAuth Pipeline</h3>
+        <span id="pl-list-count" class="text-xs text-gray-500 dark:text-gray-400"></span>
+      </div>
+      <div class="bg-white dark:bg-gray-800 rounded-lg shadow overflow-x-auto">
+        <table class="w-full text-sm">
+          <thead class="bg-gray-50 dark:bg-gray-700 text-gray-600 dark:text-gray-300 text-xs uppercase">
+            <tr>
+              <th class="px-3 py-2 text-left">建立時間</th>
+              <th class="px-3 py-2 text-left">Participant / Auth Server</th>
+              <th class="px-3 py-2 text-center">Resource</th>
+              <th class="px-3 py-2 text-left">狀態</th>
+              <th class="px-3 py-2 text-center">Share</th>
+              <th class="px-3 py-2 text-center">檢視</th>
+            </tr>
+          </thead>
+          <tbody id="pl-list-body" class="divide-y divide-gray-100 dark:divide-gray-700">
+            <tr><td colspan="6" class="px-3 py-6 text-center text-gray-400 dark:text-gray-500">載入中…</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div id="pl-scroll-sentinel" class="flex justify-center items-center py-4 min-h-[40px]"></div>
+    </div>
+
+    <!-- Result section (single pipeline detail) -->
     <div id="result-section" class="hidden">
+      <button type="button" onclick="backToList()" class="mb-3 inline-flex items-center gap-1 text-sm text-blue-600 dark:text-blue-400 hover:underline">
+        <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M15 19l-7-7 7-7"/></svg>
+        返回 Pipeline 列表
+      </button>
       <!-- Pipeline summary -->
       <div class="bg-white dark:bg-gray-800 rounded-lg shadow p-5 mb-4">
         <div class="flex items-center justify-between mb-3">
@@ -200,27 +230,111 @@
       el.textContent = msg; el.classList.remove('hidden');
       setLoading(false);
       document.getElementById('result-section').classList.add('hidden');
+      document.getElementById('list-section').classList.remove('hidden');
     }
 
+    function showList() {
+      document.getElementById('result-section').classList.add('hidden');
+      document.getElementById('error-msg').classList.add('hidden');
+      document.getElementById('list-section').classList.remove('hidden');
+      if (!listLoaded) loadPipelineList();
+    }
+
+    function backToList() {
+      document.getElementById('pipeline-token').value = '';
+      history.replaceState(null, '', location.pathname);
+      showList();
+    }
+
+    // ID is never user-typed — it only arrives via in-app navigation (a table row).
+    function openPipeline(id) {
+      document.getElementById('pipeline-token').value = '';
+      history.replaceState(null, '', location.pathname + '?pipelineId=' + encodeURIComponent(id));
+      runValidate({ pipelineId: id });
+    }
+
+    // Manual lookup box: shareToken only.
     async function doValidate() {
       const raw = document.getElementById('pipeline-token').value.trim();
       const shareToken = raw ? extractToken(raw) : '';
       if (!shareToken) {
         setLoading(false);
         document.getElementById('error-msg').classList.add('hidden');
-        document.getElementById('result-section').classList.add('hidden');
+        showList();
         return;
       }
+      runValidate({ shareToken });
+    }
+
+    async function runValidate(body) {
       const version = ++currentVersion;
+      document.getElementById('list-section').classList.add('hidden');
       setLoading(true);
       try {
-        const data = await apiFetch('/pipeline/validate', { method: 'POST', body: JSON.stringify({ shareToken }) });
+        const data = await apiFetch('/pipeline/validate', { method: 'POST', body: JSON.stringify(body) });
         if (version !== currentVersion || !data) return;
         renderResult(data);
       } catch (err) {
         if (version !== currentVersion) return;
         showError(err.message);
       }
+    }
+
+    // ── Pipeline list (table of all pipelines) ───────────────────────────────
+    const PL_PAGE = 50;
+    let plOffset = 0, plLoading = false, plExhausted = false, plTotalLoaded = 0, listLoaded = false;
+    const LIST_SPIN = `<div class="flex items-center gap-2 text-gray-400 dark:text-gray-500 text-sm"><svg class="animate-spin h-4 w-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"></path></svg>載入中…</div>`;
+    const SEARCH_SVG = `<svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" style="pointer-events:none" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path stroke-linecap="round" stroke-linejoin="round" d="M21 21l-4.35-4.35M11 8v6M8 11h6"/></svg>`;
+
+    function setPlSentinel(state) {
+      const el = document.getElementById('pl-scroll-sentinel');
+      if (state === 'loading') el.innerHTML = LIST_SPIN;
+      else if (state === 'end') el.innerHTML = '<p class="text-xs text-gray-400 dark:text-gray-500">已顯示全部</p>';
+      else el.innerHTML = '';
+    }
+
+    function pipelineRowHtml(p) {
+      const created = p.createdAt ? new Date(p.createdAt).toLocaleString() : '—';
+      const server = p.authenticationServerName || p.authenticationServerId || '—';
+      const flags = flagBadge('complete', p.complete) + ' ' + flagBadge('legal', p.legal) + ' ' + flagBadge('success', p.success);
+      const shareCell = p.shareToken
+        ? '<span class="text-green-500 dark:text-green-400" title="已產生 share token">●</span>'
+        : '<span class="text-gray-300 dark:text-gray-600" title="尚未分享">—</span>';
+      return `<tr class="hover:bg-gray-50 dark:hover:bg-gray-700 cursor-pointer" onclick="openPipeline('${escapeAttr(p.id)}')">
+        <td class="px-3 py-2 text-xs text-gray-500 dark:text-gray-400 whitespace-nowrap">${escapeHtml(created)}</td>
+        <td class="px-3 py-2 text-xs text-gray-700 dark:text-gray-300">user ${escapeHtml(p.participantUserId ?? '—')} · ${escapeHtml(server)}</td>
+        <td class="px-3 py-2 text-center text-gray-700 dark:text-gray-300">${escapeHtml(p.resourceCallCount ?? 0)}</td>
+        <td class="px-3 py-2 whitespace-nowrap">${flags}</td>
+        <td class="px-3 py-2 text-center">${shareCell}</td>
+        <td class="px-3 py-2 text-center"><span class="inline-flex items-center justify-center text-blue-600 dark:text-blue-400" title="檢視聚合結果">${SEARCH_SVG}</span></td>
+      </tr>`;
+    }
+
+    async function loadPipelineList() {
+      if (plLoading || plExhausted) return;
+      plLoading = true; setPlSentinel('loading');
+      let data;
+      try { data = await apiFetch('/pipelines?limit=' + PL_PAGE + '&offset=' + plOffset); }
+      catch (err) {
+        plLoading = false; setPlSentinel('end');
+        document.getElementById('pl-list-body').innerHTML = `<tr><td colspan="6" class="px-3 py-6 text-center text-red-500">${escapeHtml(err.message)}</td></tr>`;
+        return;
+      }
+      plLoading = false; listLoaded = true;
+      if (!data) return;
+      const tbody = document.getElementById('pl-list-body');
+      if (plOffset === 0 && data.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="6" class="px-3 py-6 text-center text-gray-400 dark:text-gray-500">沒有 Pipeline</td></tr>';
+        setPlSentinel('end'); document.getElementById('pl-list-count').textContent = '共 0 筆'; return;
+      }
+      if (plOffset === 0) tbody.innerHTML = '';
+      tbody.insertAdjacentHTML('beforeend', data.map(pipelineRowHtml).join(''));
+      plOffset += data.length; plTotalLoaded += data.length;
+      document.getElementById('pl-list-count').textContent = `已載入 ${plTotalLoaded} 筆`;
+      if (data.length < PL_PAGE) {
+        plExhausted = true; setPlSentinel('end');
+        document.getElementById('pl-list-count').textContent = `共 ${plTotalLoaded} 筆`;
+      } else setPlSentinel('');
     }
 
     function selectStandard(std) {
@@ -270,6 +384,7 @@
 
       renderStandardTabs();
       renderConnections();
+      document.getElementById('list-section').classList.add('hidden');
       document.getElementById('result-section').classList.remove('hidden');
     }
 
@@ -438,15 +553,27 @@
       </div>`;
     }
 
+    // Lazy-load more list rows on scroll (only while the list view is showing).
+    new IntersectionObserver(entries => {
+      if (entries[0].isIntersecting && !document.getElementById('list-section').classList.contains('hidden')) {
+        loadPipelineList();
+      }
+    }, { rootMargin: '200px' }).observe(document.getElementById('pl-scroll-sentinel'));
+
     async function init() {
       const buResult = await apiFetch('/settings/base-url').catch(() => null);
       if (buResult?.baseUrl) { baseUrl = buResult.baseUrl; SHARE_URL_PREFIX = baseUrl + '/view/op/'; }
 
       const params = new URLSearchParams(location.search);
+      const paramId = params.get('pipelineId');
       const paramToken = params.get('shareToken') || params.get('pipeline');
-      if (paramToken) {
+      if (paramId) {
+        runValidate({ pipelineId: paramId });
+      } else if (paramToken) {
         document.getElementById('pipeline-token').value = paramToken;
-        doValidate();
+        runValidate({ shareToken: extractToken(paramToken) });
+      } else {
+        showList();
       }
     }
 

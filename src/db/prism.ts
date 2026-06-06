@@ -108,7 +108,7 @@ export interface PipelineConnectionEntry {
 
 export interface PipelineBundle {
   id: string;
-  shareToken: string;
+  shareToken: string | null;
   accessTokenPreview: string | null;
   participantUserId: number | null;
   authenticationServerId: string | null;
@@ -121,47 +121,39 @@ export interface PipelineBundle {
   entries: PipelineConnectionEntry[];
 }
 
-// Resolve an OAuth pipeline share token into every connection that makes up that
-// single OAuth flow: the ITI-71 token-issue request, plus each ITI-72 resource
-// call and its optional token-validation (introspection) request — ordered as
-// the flow happened. All member connections are fetched in one query to keep
-// external Prism DB load minimal.
-export async function getPipelineBundleByShareToken(shareToken: string): Promise<PipelineBundle | null> {
-  const db = await getPool();
+interface PipelineRow {
+  id: string;
+  share_token: string | null;
+  access_token_preview: string | null;
+  token_issue_connection_id: string | null;
+  participant_user_id: number | null;
+  authentication_server_id: string | null;
+  issued_at: Date | null;
+  complete: boolean;
+  legal: boolean;
+  success: boolean;
+  resource_call_count: number;
+  created_at: Date;
+}
 
-  const { rows: pipelineRows } = await db.query<{
-    id: string;
-    access_token_preview: string | null;
-    token_issue_connection_id: string | null;
-    participant_user_id: number | null;
-    authentication_server_id: string | null;
-    issued_at: Date | null;
-    complete: boolean;
-    legal: boolean;
-    success: boolean;
-    resource_call_count: number;
-    created_at: Date;
-  }>(
-    `SELECT
-       id::text                        AS id,
-       access_token_preview,
-       token_issue_connection_id::text AS token_issue_connection_id,
-       participant_user_id,
-       authentication_server_id::text  AS authentication_server_id,
-       issued_at,
-       complete,
-       legal,
-       success,
-       resource_call_count,
-       created_at
-     FROM oauth_pipelines
-     WHERE share_token = $1
-     LIMIT 1`,
-    [shareToken],
-  );
-  const pipeline = pipelineRows[0];
-  if (!pipeline) return null;
+const PIPELINE_COLUMNS = `
+  id::text                        AS id,
+  share_token,
+  access_token_preview,
+  token_issue_connection_id::text AS token_issue_connection_id,
+  participant_user_id,
+  authentication_server_id::text  AS authentication_server_id,
+  issued_at,
+  complete,
+  legal,
+  success,
+  resource_call_count,
+  created_at`;
 
+// Given a single oauth_pipelines row, gather every connection that makes up that
+// OAuth flow (ITI-71 token issue, each ITI-72 resource call + optional token
+// validation) ordered as it happened, in one batched query to keep Prism load low.
+async function buildPipelineBundle(db: Pool, pipeline: PipelineRow): Promise<PipelineBundle> {
   const { rows: callRows } = await db.query<{
     resource_connection_id: string | null;
     validation_connection_id: string | null;
@@ -215,7 +207,7 @@ export async function getPipelineBundleByShareToken(shareToken: string): Promise
 
   return {
     id: pipeline.id,
-    shareToken,
+    shareToken: pipeline.share_token,
     accessTokenPreview: pipeline.access_token_preview,
     participantUserId: pipeline.participant_user_id,
     authenticationServerId: pipeline.authentication_server_id,
@@ -227,6 +219,88 @@ export async function getPipelineBundleByShareToken(shareToken: string): Promise
     createdAt: pipeline.created_at.toISOString(),
     entries,
   };
+}
+
+export async function getPipelineBundleByShareToken(shareToken: string): Promise<PipelineBundle | null> {
+  const db = await getPool();
+  const { rows } = await db.query<PipelineRow>(
+    `SELECT ${PIPELINE_COLUMNS} FROM oauth_pipelines WHERE share_token = $1 LIMIT 1`,
+    [shareToken],
+  );
+  return rows[0] ? buildPipelineBundle(db, rows[0]) : null;
+}
+
+export async function getPipelineBundleById(id: string): Promise<PipelineBundle | null> {
+  const db = await getPool();
+  const { rows } = await db.query<PipelineRow>(
+    `SELECT ${PIPELINE_COLUMNS} FROM oauth_pipelines WHERE id::text = $1 LIMIT 1`,
+    [id],
+  );
+  return rows[0] ? buildPipelineBundle(db, rows[0]) : null;
+}
+
+export interface PipelineSummary {
+  id: string;
+  shareToken: string | null;
+  participantUserId: number | null;
+  authenticationServerId: string | null;
+  authenticationServerName: string | null;
+  resourceCallCount: number;
+  complete: boolean;
+  legal: boolean;
+  success: boolean;
+  issuedAt: string | null;
+  createdAt: string;
+}
+
+// List all OAuth pipelines (newest first) for the pipeline table. A LEFT JOIN
+// resolves the auth server name in the same query to avoid N extra lookups.
+export async function getPipelines(limit: number, offset: number): Promise<PipelineSummary[]> {
+  const db = await getPool();
+  const { rows } = await db.query<{
+    id: string;
+    share_token: string | null;
+    participant_user_id: number | null;
+    authentication_server_id: string | null;
+    authentication_server_name: string | null;
+    resource_call_count: number;
+    complete: boolean;
+    legal: boolean;
+    success: boolean;
+    issued_at: Date | null;
+    created_at: Date;
+  }>(
+    `SELECT
+       p.id::text                       AS id,
+       p.share_token,
+       p.participant_user_id,
+       p.authentication_server_id::text AS authentication_server_id,
+       s.name                           AS authentication_server_name,
+       p.resource_call_count,
+       p.complete,
+       p.legal,
+       p.success,
+       p.issued_at,
+       p.created_at
+     FROM oauth_pipelines p
+     LEFT JOIN backend_servers s ON s.id = p.authentication_server_id
+     ORDER BY p.created_at DESC
+     LIMIT $1 OFFSET $2`,
+    [limit, offset],
+  );
+  return rows.map(r => ({
+    id: r.id,
+    shareToken: r.share_token,
+    participantUserId: r.participant_user_id,
+    authenticationServerId: r.authentication_server_id,
+    authenticationServerName: r.authentication_server_name,
+    resourceCallCount: r.resource_call_count,
+    complete: r.complete,
+    legal: r.legal,
+    success: r.success,
+    issuedAt: r.issued_at ? r.issued_at.toISOString() : null,
+    createdAt: r.created_at.toISOString(),
+  }));
 }
 
 export async function getConnectionIdByShareToken(shareToken: string): Promise<string | null> {
