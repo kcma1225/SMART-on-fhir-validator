@@ -9,7 +9,7 @@
   <script>if(localStorage.getItem('darkMode')==='1')document.documentElement.classList.add('dark')</script>
   <script src="https://cdn.tailwindcss.com"></script>
   <script>tailwind.config={darkMode:'class'}</script>
-  <script src="ui.js?v=3"></script>
+  <script src="ui.js?v=4"></script>
 </head>
 <body class="bg-gray-100 dark:bg-gray-900 min-h-screen transition-colors duration-200">
   <div data-app-nav="rules"></div>
@@ -23,13 +23,13 @@
         class="std-tab px-5 py-2 text-sm font-semibold border-b-2 -mb-px transition">IUA</button>
     </div>
 
-    <div class="flex items-center justify-between mb-4">
+    <div class="flex flex-wrap items-center justify-between gap-3 mb-4">
       <div class="flex items-center gap-2">
         <h2 class="text-2xl font-bold dark:text-gray-100">欄位檢查規則</h2>
         <div class="relative group">
           <button type="button" aria-label="欄位類型說明"
             class="w-5 h-5 rounded-full bg-gray-700 dark:bg-gray-600 text-white text-xs font-bold leading-5 text-center">!</button>
-          <div class="hidden group-hover:block absolute left-0 top-7 z-20 w-[42rem] rounded bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 shadow-lg p-4 text-sm">
+          <div class="hidden group-hover:block absolute left-0 top-7 z-20 w-[min(42rem,90vw)] rounded bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 shadow-lg p-4 text-sm">
             <div class="mb-3">
               <div class="font-semibold text-red-700 dark:text-red-400">required</div>
               <p class="text-gray-600 dark:text-gray-400 mt-1">欄位不存在直接 FAIL，會讓該筆驗證失敗。</p>
@@ -90,14 +90,14 @@
 
   <!-- Field form modal -->
   <div id="form-panel" class="hidden fixed inset-0 z-30 bg-black bg-opacity-40 p-4">
-    <div class="bg-white dark:bg-gray-800 rounded-lg shadow-xl w-full max-w-5xl mx-auto mt-24 p-5">
+    <div class="bg-white dark:bg-gray-800 rounded-lg shadow-xl w-full max-w-5xl mx-auto mt-10 sm:mt-24 p-5 max-h-[85vh] overflow-y-auto">
       <div class="flex items-center justify-between mb-4">
         <div class="flex items-center gap-2">
           <h3 id="form-title" class="font-semibold dark:text-gray-100">新增欄位</h3>
           <div class="relative group">
             <button type="button" aria-label="欄位表單說明"
               class="w-5 h-5 rounded-full bg-gray-700 dark:bg-gray-600 text-white text-xs font-bold leading-5 text-center">!</button>
-            <div class="hidden group-hover:block absolute left-0 top-7 z-40 w-[58rem] rounded bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 shadow-lg p-4 text-sm">
+            <div class="hidden group-hover:block absolute left-0 top-7 z-40 w-[min(58rem,92vw)] rounded bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 shadow-lg p-4 text-sm">
               <div class="space-y-3 text-gray-600 dark:text-gray-400">
                 <p><span class="font-semibold text-gray-800 dark:text-gray-200">Flow</span>：這個欄位屬於哪個驗證流程。範例：<span class="font-mono">authorization_request</span></p>
                 <p><span class="font-semibold text-gray-800 dark:text-gray-200">Field Name</span>：要檢查的欄位名稱。範例：<span class="font-mono">client_id</span></p>
@@ -157,7 +157,7 @@
 
   <!-- Flow form modal -->
   <div id="flow-panel" class="hidden fixed inset-0 z-30 bg-black bg-opacity-40 p-4">
-    <div class="bg-white dark:bg-gray-800 rounded-lg shadow-xl w-full max-w-3xl mx-auto mt-24 p-5">
+    <div class="bg-white dark:bg-gray-800 rounded-lg shadow-xl w-full max-w-3xl mx-auto mt-10 sm:mt-24 p-5 max-h-[85vh] overflow-y-auto">
       <div class="flex items-center justify-between mb-4">
         <h3 class="font-semibold dark:text-gray-100">編輯 Endpoint</h3>
         <button type="button" onclick="closeFlowForm()" class="text-gray-500 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200 text-xl leading-none">&times;</button>
@@ -279,6 +279,7 @@
             </div>
             <button type="button" data-action="edit-flow" data-flow="${flowStepAttr}" class="text-blue-600 dark:text-blue-400 hover:underline text-xs whitespace-nowrap">編輯 Endpoint</button>
           </div>
+          <div class="overflow-x-auto">
           <table class="w-full text-sm">
             <thead class="text-xs text-gray-500 dark:text-gray-400 uppercase">
               <tr>
@@ -301,6 +302,7 @@
               </tr>`).join('')}
             </tbody>
           </table>
+          </div>
         </section>`;
       }).join('');
     }

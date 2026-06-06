@@ -65,19 +65,41 @@
     return `<button type="button" data-theme-toggle onclick="window.toggleDark()" class="${className}" aria-label="切換深色模式" aria-pressed="false" title="切換深色模式">${moonIcon}${sunIcon}</button>`;
   }
 
+  const hamburgerIcon = '<svg xmlns="http://www.w3.org/2000/svg" class="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M4 6h16M4 12h16M4 18h16"/></svg>';
+
   function renderNav(container) {
     const active = container.dataset.appNav || '';
-    const links = navItems.map(([key, label, href]) => {
+
+    // Desktop: inline row; "settings" carries ml-auto so admin items sit on the right.
+    const desktopLinks = navItems.map(([key, label, href]) => {
       const classes = key === active ? 'text-blue-300 font-medium' : 'hover:text-gray-300';
       const spacer = key === 'settings' ? ' ml-auto' : '';
       return `<a href="${withBase(href)}" class="${spacer}${spacer ? ' ' : ''}${classes}">${label}</a>`;
     }).join('');
 
-    container.innerHTML = `<nav class="bg-gray-800 dark:bg-gray-950 text-white px-6 py-3 flex items-center gap-6">
-      <span class="font-bold">IUA/SMART Validator</span>
-      ${links}
-      ${themeButton('hover:text-gray-300')}
-      <button type="button" data-app-logout class="text-sm hover:text-gray-300">Logout</button>
+    // Mobile: stacked block links inside a collapsible panel.
+    const mobileLinks = navItems.map(([key, label, href]) => {
+      const classes = key === active ? 'bg-gray-700 dark:bg-gray-800 text-blue-300 font-medium' : 'hover:bg-gray-700 dark:hover:bg-gray-800';
+      return `<a href="${withBase(href)}" class="block px-3 py-2 rounded ${classes}">${label}</a>`;
+    }).join('');
+
+    container.innerHTML = `<nav class="bg-gray-800 dark:bg-gray-950 text-white px-4 sm:px-6 py-3">
+      <div class="flex items-center gap-4">
+        <span class="font-bold whitespace-nowrap">IUA/SMART Validator</span>
+        <div class="hidden md:flex items-center gap-6 flex-1">
+          ${desktopLinks}
+          ${themeButton('hover:text-gray-300')}
+          <button type="button" data-app-logout class="text-sm hover:text-gray-300">Logout</button>
+        </div>
+        <div class="flex items-center gap-2 ml-auto md:hidden">
+          ${themeButton('hover:text-gray-300')}
+          <button type="button" data-nav-toggle aria-label="切換選單" aria-expanded="false" class="p-1 rounded hover:bg-gray-700">${hamburgerIcon}</button>
+        </div>
+      </div>
+      <div data-nav-menu class="hidden md:hidden mt-3 pt-3 border-t border-gray-700 dark:border-gray-800">
+        ${mobileLinks}
+        <button type="button" data-app-logout class="block w-full text-left px-3 py-2 rounded hover:bg-gray-700 dark:hover:bg-gray-800">Logout</button>
+      </div>
     </nav>`;
   }
 
@@ -89,6 +111,15 @@
     document.addEventListener('click', event => {
       if (event.target.closest('[data-app-logout]') && typeof window.logout === 'function') {
         window.logout();
+        return;
+      }
+      const toggle = event.target.closest('[data-nav-toggle]');
+      if (toggle) {
+        const menu = toggle.closest('nav')?.querySelector('[data-nav-menu]');
+        if (menu) {
+          const nowHidden = menu.classList.toggle('hidden');
+          toggle.setAttribute('aria-expanded', String(!nowHidden));
+        }
       }
     });
     setTheme(document.documentElement.classList.contains('dark'), false);

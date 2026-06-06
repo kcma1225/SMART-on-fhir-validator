@@ -9,13 +9,13 @@
   <script>if(localStorage.getItem('darkMode')==='1')document.documentElement.classList.add('dark')</script>
   <script src="https://cdn.tailwindcss.com"></script>
   <script>tailwind.config={darkMode:'class'}</script>
-  <script src="ui.js?v=3"></script>
+  <script src="ui.js?v=4"></script>
 </head>
 <body class="bg-gray-100 dark:bg-gray-900 min-h-screen transition-colors duration-200">
   <div data-app-nav="test"></div>
 
   <div class="max-w-5xl mx-auto p-6">
-    <div class="flex items-center justify-between mb-4">
+    <div class="flex flex-wrap items-center justify-between gap-3 mb-4">
       <h2 class="text-2xl font-bold dark:text-gray-100">測試腳本執行</h2>
       <button onclick="runTests()" id="run-btn" class="bg-blue-600 text-white px-5 py-2 rounded font-medium hover:bg-blue-700 transition">執行測試</button>
     </div>

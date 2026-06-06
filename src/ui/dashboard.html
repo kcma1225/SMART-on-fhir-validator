@@ -9,7 +9,7 @@
   <script>if(localStorage.getItem('darkMode')==='1')document.documentElement.classList.add('dark')</script>
   <script src="https://cdn.tailwindcss.com"></script>
   <script>tailwind.config={darkMode:'class'}</script>
-  <script src="ui.js?v=3"></script>
+  <script src="ui.js?v=4"></script>
 </head>
 <body class="bg-gray-100 dark:bg-gray-900 min-h-screen transition-colors duration-200">
   <div data-app-nav="dashboard"></div>
@@ -19,7 +19,7 @@
 
     <div class="bg-white dark:bg-gray-800 rounded-lg shadow p-5 mb-6">
       <h3 class="font-semibold text-lg mb-3 dark:text-gray-100">Polling 狀態</h3>
-      <div class="grid grid-cols-2 gap-4 text-sm">
+      <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 text-sm">
         <div><span class="text-gray-500 dark:text-gray-400">狀態：</span><span id="poll-running" class="font-medium dark:text-gray-200">—</span></div>
         <div><span class="text-gray-500 dark:text-gray-400">上次執行：</span><span id="poll-last" class="font-medium dark:text-gray-200">—</span></div>
         <div><span class="text-gray-500 dark:text-gray-400">下次執行：</span><span id="poll-next" class="font-medium dark:text-gray-200">—</span></div>
